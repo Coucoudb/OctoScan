@@ -1,8 +1,10 @@
-name: CI (main)
+name: CI (dev)
 
 on:
   push:
-    branches: [main]
+    branches: [dev]
+  pull_request:
+    branches: [dev]
 
 permissions:
   contents: read
@@ -59,29 +61,3 @@ jobs:
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: semgrep.sarif
-
-  build:
-    name: Build
-    needs: [lint, audit, sast]
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Build
-        run: cargo build --release
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v5
-        with:
-          name: octoscan-${{ matrix.os }}
-          path: |
-            target/release/octoscan
-            target/release/octoscan.exe
-          if-no-files-found: ignore
