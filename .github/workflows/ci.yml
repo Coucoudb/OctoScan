@@ -61,12 +61,18 @@ jobs:
           sarif_file: semgrep.sarif
 
   build:
-    name: Build
+    name: Build (${{ matrix.os }})
     needs: [lint, audit, sast]
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            artifact: octoscan-linux-amd64
+            binary: target/release/octoscan
+          - os: windows-latest
+            artifact: octoscan-windows-amd64.exe
+            binary: target/release/octoscan.exe
     steps:
       - uses: actions/checkout@v5
 
@@ -80,8 +86,54 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v5
         with:
-          name: octoscan-${{ matrix.os }}
-          path: |
-            target/release/octoscan
-            target/release/octoscan.exe
-          if-no-files-found: ignore
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.binary }}
+
+  release:
+    name: Create Release
+    needs: [build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Get version
+        id: version
+        run: echo "version=$(grep '^version' Cargo.toml | head -1 | sed 's/.*= *\"//' | sed 's/\"//')" >> "$GITHUB_OUTPUT"
+
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: octoscan-linux-amd64
+          path: artifacts/linux
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: octoscan-windows-amd64.exe
+          path: artifacts/windows
+
+      - name: Prepare release assets
+        run: |
+          chmod +x artifacts/linux/octoscan
+          mv artifacts/linux/octoscan octoscan-linux-amd64
+          mv artifacts/windows/octoscan.exe octoscan-windows-amd64.exe
+
+      - name: Create or update release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: OctoScan v${{ steps.version.outputs.version }}
+          body: |
+            ## OctoScan v${{ steps.version.outputs.version }}
+
+            ### Downloads
+            - **Linux (amd64):** `octoscan-linux-amd64`
+            - **Windows (amd64):** `octoscan-windows-amd64.exe`
+          files: |
+            octoscan-linux-amd64
+            octoscan-windows-amd64.exe
+          draft: false
+          prerelease: false
+          make_latest: true
