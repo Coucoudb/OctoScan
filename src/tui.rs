@@ -1,6 +1,8 @@
 use anyhow::Result;
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers},
+    event::{
+        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers,
+    },
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -24,11 +26,6 @@ enum AppEvent {
     // Install events
     InstallProgress(installer::InstallProgress),
     InstallDone,
-}
-
-pub async fn run_interactive() -> Result<()> {
-    let app = App::new_interactive();
-    run_app(app).await
 }
 
 pub async fn run_app(mut app: App) -> Result<()> {
@@ -97,9 +94,31 @@ async fn run_event_loop(
                         app.install_progress.push(progress);
                     }
                     AppEvent::InstallDone => {
-                        // Re-check tools after installation
-                        app.progress_message = "Verifying installations...".to_string();
-                        event_rx = Some(start_tool_check(app.selected_scanners.clone()));
+                        // Refresh PATH in current process to pick up new installs
+                        installer::refresh_path();
+
+                        let any_failed = app
+                            .install_progress
+                            .iter()
+                            .any(|p| p.status != InstallStatus::Success);
+
+                        if any_failed {
+                            // Some installs failed — go back to ToolCheck and let user decide
+                            app.progress_message =
+                                "Some installations failed — see logs for details.".to_string();
+                            // Re-check which tools are now available
+                            event_rx = Some(start_tool_check(app.selected_scanners.clone()));
+                        } else {
+                            // All succeeded — start scanning
+                            app.progress_message = "Tools installed, starting scan...".to_string();
+                            app.scan_status = ScanStatus::Running;
+                            app.started_at = Some(chrono::Utc::now());
+                            app.screen = AppScreen::Scanning;
+                            event_rx = Some(start_scan_task(
+                                app.target.clone(),
+                                app.selected_scanners.clone(),
+                            ));
+                        }
                         break;
                     }
                     AppEvent::ScanProgress(msg) => {
@@ -123,8 +142,12 @@ async fn run_event_loop(
         // Poll for keyboard events
         if event::poll(Duration::from_millis(50))? {
             if let Event::Key(key) = event::read()? {
-                if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c')
-                {
+                // Ignore Release/Repeat events (fixes double input on Windows)
+                if key.kind != KeyEventKind::Press {
+                    continue;
+                }
+
+                if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
                     app.should_quit = true;
                 }
 
@@ -140,7 +163,7 @@ async fn run_event_loop(
                         KeyCode::Char('q') => {
                             app.should_quit = true;
                         }
-                        KeyCode::Char('?') => {
+                        KeyCode::Char('h') => {
                             app.show_help = !app.show_help;
                         }
                         _ => {}
@@ -249,11 +272,8 @@ async fn run_event_loop(
                         _ => {}
                     },
 
-                    AppScreen::Scanning => match key.code {
-                        KeyCode::Char('q') => {
-                            app.should_quit = true;
-                        }
-                        _ => {}
+                    AppScreen::Scanning => if let KeyCode::Char('q') = key.code {
+                        app.should_quit = true;
                     },
 
                     AppScreen::Results => match key.code {
@@ -308,12 +328,10 @@ async fn run_event_loop(
                             if !path.is_empty() {
                                 match crate::export::export_results(app, &path) {
                                     Ok(_) => {
-                                        app.progress_message =
-                                            format!("Exported to {}", path);
+                                        app.progress_message = format!("Exported to {}", path);
                                     }
                                     Err(e) => {
-                                        app.progress_message =
-                                            format!("Export failed: {}", e);
+                                        app.progress_message = format!("Export failed: {}", e);
                                     }
                                 }
                                 app.screen = AppScreen::Results;

@@ -65,12 +65,6 @@ fn draw_header(f: &mut Frame, area: Rect, app: &App) {
                 .fg(Color::Green)
                 .add_modifier(Modifier::BOLD),
         ),
-        ScanStatus::Error(msg) => Span::styled(
-            format!(" ERROR: {} ", msg),
-            Style::default()
-                .fg(Color::Red)
-                .add_modifier(Modifier::BOLD),
-        ),
     };
 
     let header = Paragraph::new(Line::from(vec![
@@ -103,13 +97,15 @@ fn draw_header(f: &mut Frame, area: Rect, app: &App) {
 
 fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
     let help_text = match app.screen {
-        AppScreen::Home => "s: Start scan │ ?: Help │ q: Quit",
+        AppScreen::Home => "s: Start scan │ h: Help │ q: Quit",
         AppScreen::TargetInput => "Enter: Confirm │ Esc: Back",
         AppScreen::ScannerSelect => "↑/↓: Navigate │ Space: Toggle │ Enter: Start │ Esc: Back",
         AppScreen::ToolCheck => "i: Install missing │ s: Skip & scan available │ q: Quit",
         AppScreen::Installing => "Installing... │ ↑/↓: Scroll │ q: Cancel",
         AppScreen::Scanning => "Scanning in progress... │ q: Cancel",
-        AppScreen::Results => "Tab/Shift+Tab: Switch scanner │ ↑/↓: Scroll │ e: Export │ n: New scan │ q: Quit",
+        AppScreen::Results => {
+            "Tab/Shift+Tab: Switch scanner │ ↑/↓: Scroll │ e: Export │ n: New scan │ q: Quit"
+        }
         AppScreen::Export => "Enter: Confirm │ Esc: Cancel",
     };
 
@@ -149,22 +145,38 @@ fn draw_home(f: &mut Frame, area: Rect) {
         .alignment(Alignment::Center);
     f.render_widget(logo, chunks[0]);
 
-    let subtitle = Paragraph::new("Security Auditing Tool — Orchestrate Nmap, Nuclei, ZAP and more")
-        .style(Style::default().fg(Color::Gray))
-        .alignment(Alignment::Center);
+    let subtitle =
+        Paragraph::new("Security Auditing Tool — Orchestrate Nmap, Nuclei, ZAP and more")
+            .style(Style::default().fg(Color::Gray))
+            .alignment(Alignment::Center);
     f.render_widget(subtitle, chunks[1]);
 
     let menu_items = vec![
         ListItem::new(Line::from(vec![
-            Span::styled(" [s] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                " [s] ",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::raw("Start a new scan"),
         ])),
         ListItem::new(Line::from(vec![
-            Span::styled(" [?] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                " [h] ",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::raw("Show help"),
         ])),
         ListItem::new(Line::from(vec![
-            Span::styled(" [q] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                " [q] ",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::raw("Quit"),
         ])),
     ];
@@ -219,9 +231,11 @@ fn draw_scanner_select(f: &mut Frame, area: Rect, app: &App) {
         .style(Style::default().fg(Color::White));
     f.render_widget(title, chunks[0]);
 
-    let scanner_names = ["Nmap — Port scanning & service detection", 
-                         "Nuclei — Vulnerability scanning with templates",
-                         "ZAP — Web application security scanner"];
+    let scanner_names = [
+        "Nmap — Port scanning & service detection",
+        "Nuclei — Vulnerability scanning with templates",
+        "ZAP — Web application security scanner",
+    ];
 
     let items: Vec<ListItem> = scanner_names
         .iter()
@@ -235,7 +249,11 @@ fn draw_scanner_select(f: &mut Frame, area: Rect, app: &App) {
             } else {
                 Style::default().fg(Color::White)
             };
-            let prefix = if i == app.scanner_cursor { "▸ " } else { "  " };
+            let prefix = if i == app.scanner_cursor {
+                "▸ "
+            } else {
+                "  "
+            };
             ListItem::new(format!("{}{} {}", prefix, checkbox, name)).style(style)
         })
         .collect();
@@ -260,10 +278,7 @@ fn draw_scanner_select(f: &mut Frame, area: Rect, app: &App) {
 fn draw_scanning(f: &mut Frame, area: Rect, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(5),
-            Constraint::Min(5),
-        ])
+        .constraints([Constraint::Length(5), Constraint::Min(5)])
         .split(area);
 
     // Progress info
@@ -298,10 +313,7 @@ fn draw_scanning(f: &mut Frame, area: Rect, app: &App) {
                     format!(" {} ", status_icon),
                     Style::default().fg(color).add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(
-                    format!("{}", r.scanner),
-                    Style::default().fg(Color::White),
-                ),
+                Span::styled(format!("{}", r.scanner), Style::default().fg(Color::White)),
                 Span::styled(
                     format!(" — {} findings", findings_count),
                     Style::default().fg(Color::DarkGray),
@@ -323,11 +335,7 @@ fn draw_results(f: &mut Frame, area: Rect, app: &App) {
     if app.results.is_empty() {
         let msg = Paragraph::new(" No results available.")
             .style(Style::default().fg(Color::DarkGray))
-            .block(
-                Block::default()
-                    .title(" Results ")
-                    .borders(Borders::ALL),
-            );
+            .block(Block::default().title(" Results ").borders(Borders::ALL));
         f.render_widget(msg, area);
         return;
     }
@@ -444,10 +452,7 @@ fn draw_results(f: &mut Frame, area: Rect, app: &App) {
                         ]),
                         Line::from(vec![
                             Span::raw("        "),
-                            Span::styled(
-                                &finding.details,
-                                Style::default().fg(Color::DarkGray),
-                            ),
+                            Span::styled(&finding.details, Style::default().fg(Color::DarkGray)),
                         ]),
                         Line::from(""),
                     ])
@@ -523,10 +528,17 @@ fn draw_tool_check(f: &mut Frame, area: Rect, app: &App) {
     } else {
         format!(" {} of {} tools are missing", missing_count, total)
     };
-    let title_color = if missing_count == 0 { Color::Green } else { Color::Yellow };
+    let title_color = if missing_count == 0 {
+        Color::Green
+    } else {
+        Color::Yellow
+    };
 
-    let title = Paragraph::new(title_text)
-        .style(Style::default().fg(title_color).add_modifier(Modifier::BOLD));
+    let title = Paragraph::new(title_text).style(
+        Style::default()
+            .fg(title_color)
+            .add_modifier(Modifier::BOLD),
+    );
     f.render_widget(title, chunks[0]);
 
     // Tool status list
@@ -547,17 +559,16 @@ fn draw_tool_check(f: &mut Frame, area: Rect, app: &App) {
                 ),
                 Span::styled(
                     format!("{}", status.scanner),
-                    Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
                 ),
             ])];
 
             if !status.installed {
                 lines.push(Line::from(vec![
-                    Span::raw("              Install: "),
-                    Span::styled(
-                        &status.install_cmd,
-                        Style::default().fg(Color::DarkGray),
-                    ),
+                    Span::raw("              "),
+                    Span::styled(&status.install_hint, Style::default().fg(Color::DarkGray)),
                 ]));
             }
 
@@ -576,21 +587,45 @@ fn draw_tool_check(f: &mut Frame, area: Rect, app: &App) {
 
     // Action hint
     if missing_count > 0 {
-        let hint = Paragraph::new(vec![
+        let mut action_lines = vec![
             Line::from(vec![
-                Span::styled(" [i] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [i] ",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Install all missing tools automatically"),
             ]),
             Line::from(vec![
-                Span::styled(" [s] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [s] ",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Skip and scan with available tools only"),
             ]),
             Line::from(vec![
-                Span::styled(" [q] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    " [q] ",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("Quit"),
             ]),
-        ])
-        .block(
+        ];
+
+        if let Some(ref log_path) = app.log_path {
+            action_lines.push(Line::from(""));
+            action_lines.push(Line::from(Span::styled(
+                format!(" Logs: {}", log_path),
+                Style::default().fg(Color::DarkGray),
+            )));
+        }
+
+        let hint = Paragraph::new(action_lines).block(
             Block::default()
                 .title(" Actions ")
                 .borders(Borders::ALL)
@@ -606,6 +641,7 @@ fn draw_installing(f: &mut Frame, area: Rect, app: &App) {
         .constraints([
             Constraint::Length(5),
             Constraint::Min(8),
+            Constraint::Length(3),
         ])
         .split(area);
 
@@ -633,8 +669,6 @@ fn draw_installing(f: &mut Frame, area: Rect, app: &App) {
         .iter()
         .map(|p| {
             let (icon, color, status_text) = match &p.status {
-                InstallStatus::Pending => ("⋯", Color::DarkGray, "Pending".to_string()),
-                InstallStatus::Installing => ("⟳", Color::Yellow, "Installing...".to_string()),
                 InstallStatus::Success => ("✓", Color::Green, "Installed successfully".to_string()),
                 InstallStatus::Failed(msg) => ("✗", Color::Red, format!("Failed: {}", msg)),
             };
@@ -646,12 +680,11 @@ fn draw_installing(f: &mut Frame, area: Rect, app: &App) {
                 ),
                 Span::styled(
                     format!("{}", p.scanner),
-                    Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(
-                    format!(" — {}", status_text),
-                    Style::default().fg(color),
-                ),
+                Span::styled(format!(" — {}", status_text), Style::default().fg(color)),
             ])];
 
             // Show output snippet on failure
@@ -675,6 +708,21 @@ fn draw_installing(f: &mut Frame, area: Rect, app: &App) {
             .border_style(Style::default().fg(Color::DarkGray)),
     );
     f.render_widget(list, chunks[1]);
+
+    // Log file path
+    let log_text = if let Some(ref path) = app.log_path {
+        format!(" Logs: {}", path)
+    } else {
+        " Logs: not available".to_string()
+    };
+    let log_info = Paragraph::new(log_text)
+        .style(Style::default().fg(Color::DarkGray))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::DarkGray)),
+        );
+    f.render_widget(log_info, chunks[2]);
 }
 
 fn draw_help_popup(f: &mut Frame, area: Rect) {
@@ -703,7 +751,7 @@ fn draw_help_popup(f: &mut Frame, area: Rect) {
         Line::from("   Space      Toggle scanner selection"),
         Line::from("   e          Export results"),
         Line::from("   n          New scan (from results)"),
-        Line::from("   ?          Toggle help"),
+        Line::from("   h          Toggle help"),
         Line::from("   q/Ctrl+C   Quit"),
         Line::from(""),
         Line::from(" Supported Scanners:"),
@@ -712,7 +760,7 @@ fn draw_help_popup(f: &mut Frame, area: Rect) {
         Line::from("   zap      OWASP ZAP web app security scanner"),
         Line::from(""),
         Line::from(Span::styled(
-            " Press ? to close",
+            " Press h to close",
             Style::default().fg(Color::DarkGray),
         )),
     ];

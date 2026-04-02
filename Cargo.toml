@@ -7,7 +7,7 @@ license = "MIT"
 
 [dependencies]
 # TUI
-ratatui = "0.29"
+ratatui = "0.30"
 crossterm = "0.28"
 
 # Async runtime
@@ -25,6 +25,9 @@ chrono = { version = "0.4", features = ["serde"] }
 
 # Error handling
 anyhow = "1"
+
+# Logging
+log = "0.4"
 
 # UUID for scan IDs
 uuid = { version = "1", features = ["v4"] }

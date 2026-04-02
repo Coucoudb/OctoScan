@@ -20,7 +20,6 @@ pub enum ScanStatus {
     Idle,
     Running,
     Completed,
-    Error(String),
 }
 
 pub struct App {
@@ -46,9 +45,10 @@ pub struct App {
     pub show_help: bool,
     // Tool check & install state
     pub tool_statuses: Vec<ToolStatus>,
-    pub tool_check_cursor: usize,
     pub install_progress: Vec<InstallProgress>,
     pub install_scroll: u16,
+    // Logging
+    pub log_path: Option<String>,
 }
 
 impl App {
@@ -75,9 +75,9 @@ impl App {
             export_input: String::from("report.json"),
             show_help: false,
             tool_statuses: Vec::new(),
-            tool_check_cursor: 0,
             install_progress: Vec::new(),
             install_scroll: 0,
+            log_path: None,
         }
     }
 
@@ -104,9 +104,9 @@ impl App {
             export_input: String::from("report.json"),
             show_help: false,
             tool_statuses: Vec::new(),
-            tool_check_cursor: 0,
             install_progress: Vec::new(),
             install_scroll: 0,
+            log_path: None,
         }
     }
 

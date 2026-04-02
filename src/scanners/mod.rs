@@ -88,10 +88,14 @@ pub async fn run_scanner(scanner_type: &ScannerType, target: &str) -> Result<Sca
 
 /// Check if a tool is available in PATH
 pub async fn check_tool(name: &str) -> bool {
-    tokio::process::Command::new(if cfg!(target_os = "windows") { "where" } else { "which" })
-        .arg(name)
-        .output()
-        .await
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    tokio::process::Command::new(if cfg!(target_os = "windows") {
+        "where"
+    } else {
+        "which"
+    })
+    .arg(name)
+    .output()
+    .await
+    .map(|o| o.status.success())
+    .unwrap_or(false)
 }

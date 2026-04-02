@@ -63,13 +63,26 @@ fn export_txt(app: &App, path: &str) -> Result<()> {
     output.push_str("═══════════════════════════════════════════════════════\n\n");
     output.push_str(&format!("Scan ID:    {}\n", app.id));
     output.push_str(&format!("Target:     {}\n", app.target));
-    output.push_str(&format!("Generated:  {}\n", Utc::now().format("%Y-%m-%d %H:%M:%S UTC")));
-    output.push_str(&format!("Scanners:   {}\n\n", app.selected_scanners.iter().map(|s| s.to_string()).collect::<Vec<_>>().join(", ")));
+    output.push_str(&format!(
+        "Generated:  {}\n",
+        Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
+    ));
+    output.push_str(&format!(
+        "Scanners:   {}\n\n",
+        app.selected_scanners
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    ));
 
     for result in &app.results {
         output.push_str("───────────────────────────────────────────────────────\n");
         output.push_str(&format!("  Scanner: {}\n", result.scanner));
-        output.push_str(&format!("  Status:  {}\n", if result.success { "Success" } else { "Error" }));
+        output.push_str(&format!(
+            "  Status:  {}\n",
+            if result.success { "Success" } else { "Error" }
+        ));
 
         let duration = result.finished_at - result.started_at;
         output.push_str(&format!("  Duration: {}s\n", duration.num_seconds()));

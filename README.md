@@ -6,13 +6,15 @@ OctoScan is a CLI wrapper that orchestrates popular security tools (Nmap, Nuclei
 
 - **Interactive TUI** — Navigate menus, select scanners, and browse results with keyboard shortcuts
 - **Multi-scanner orchestration** — Run Nmap, Nuclei, and ZAP from a single interface
+- **Auto-installation** — Automatically detects and installs missing tools on Windows, macOS, and Linux
 - **Structured findings** — Parsed results with severity levels (Critical, High, Medium, Low, Info)
 - **Export** — Save reports as JSON or TXT
 - **CLI mode** — Run scans directly from the command line without interactive mode
+- **Logging** — Debug logs written to `%LOCALAPPDATA%\octoscan\logs\` (Windows) for troubleshooting
 
 ## Prerequisites
 
-Install the security tools you want to use:
+OctoScan orchestrates the following security tools:
 
 | Scanner | Install |
 |---------|---------|
@@ -20,7 +22,7 @@ Install the security tools you want to use:
 | [Nuclei](https://github.com/projectdiscovery/nuclei) | `go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest` |
 | [ZAP](https://www.zaproxy.org/) | `apt install zaproxy` / `brew install --cask zap` / [zaproxy.org/download](https://www.zaproxy.org/download/) |
 
-OctoScan will detect which tools are available and report if any are missing.
+> **Note:** On Windows, OctoScan can **automatically install** missing tools when you press `i` on the tool check screen. It handles Npcap, VC++ 2013 runtime, Nmap, Nuclei, ZAP, and Java 17 dependencies.
 
 ## Installation
 
@@ -54,7 +56,8 @@ Launch the TUI and navigate with keyboard shortcuts:
 | `Tab` / `Shift+Tab` | Switch between scanner result tabs |
 | `e` | Export results |
 | `n` | New scan (from results screen) |
-| `?` | Toggle help |
+| `h` | Toggle help |
+| `i` | Install missing tools (from tool check screen) |
 | `q` / `Ctrl+C` | Quit |
 
 ### CLI mode
@@ -80,12 +83,23 @@ src/
 ├── tui.rs            # Terminal event loop
 ├── ui.rs             # Ratatui UI rendering
 ├── export.rs         # JSON/TXT export
+├── installer.rs      # Auto-installation of missing tools
+├── logger.rs         # File-based logging
 └── scanners/
     ├── mod.rs        # Scanner trait & types
     ├── nmap.rs       # Nmap integration
     ├── nuclei.rs     # Nuclei integration
     └── zap.rs        # ZAP integration
 ```
+
+## CI
+
+GitHub Actions runs on every push/PR to `main`:
+
+- **Lint** — `cargo fmt --check` + `cargo clippy -D warnings`
+- **Audit** — `cargo audit` for dependency vulnerabilities
+- **SAST** — Semgrep static analysis with SARIF upload
+- **Build** — Release build on Linux and Windows
 
 ## ⚠️ Legal Disclaimer
 
