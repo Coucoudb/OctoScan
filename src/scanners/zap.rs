@@ -188,7 +188,11 @@ fn parse_zap_output(output: &str) -> Vec<Finding> {
                 Severity::Medium
             };
             // Format: "WARN-NEW: Cookie ... [10010] x1 url"
-            let desc = trimmed.split_once(':').map(|x| x.1).unwrap_or(trimmed).trim();
+            let desc = trimmed
+                .split_once(':')
+                .map(|x| x.1)
+                .unwrap_or(trimmed)
+                .trim();
             let title = if let Some(bracket_start) = desc.find('[') {
                 desc[..bracket_start].trim().to_string()
             } else {

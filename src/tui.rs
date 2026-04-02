@@ -272,9 +272,11 @@ async fn run_event_loop(
                         _ => {}
                     },
 
-                    AppScreen::Scanning => if let KeyCode::Char('q') = key.code {
-                        app.should_quit = true;
-                    },
+                    AppScreen::Scanning => {
+                        if let KeyCode::Char('q') = key.code {
+                            app.should_quit = true;
+                        }
+                    }
 
                     AppScreen::Results => match key.code {
                         KeyCode::Char('q') => {
