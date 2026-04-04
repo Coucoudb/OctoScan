@@ -2,7 +2,6 @@ use anyhow::{Context, Result};
 use log::{error, info, warn};
 use std::process::Stdio;
 use tokio::process::Command;
-use uuid::Uuid;
 
 use crate::scanners::{check_tool, ScannerType};
 
@@ -530,11 +529,12 @@ pub async fn install_tool(scanner: &ScannerType) -> Result<InstallProgress> {
 
     let output = match method {
         InstallMethod::PsScript(script) => {
-            let script_path = std::env::temp_dir().join(format!(
-                "octoscan_{}_{}.ps1",
-                scanner.to_string().to_lowercase(),
-                Uuid::new_v4()
-            ));
+            let script_file = tempfile::Builder::new()
+                .prefix(&format!("octoscan_{}_", scanner.to_string().to_lowercase()))
+                .suffix(".ps1")
+                .tempfile()
+                .context("Failed to create secure temp file for PS script")?;
+            let script_path = script_file.path().to_path_buf();
             info!("Writing PS script to {}", script_path.display());
             std::fs::write(&script_path, &script)
                 .context(format!("Failed to write {}", script_path.display()))?;

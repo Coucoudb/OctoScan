@@ -31,3 +31,6 @@ log = "0.4"
 
 # UUID for scan IDs
 uuid = { version = "1", features = ["v4"] }
+
+# Secure temp files
+tempfile = "3"
