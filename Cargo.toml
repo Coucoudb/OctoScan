@@ -1,6 +1,6 @@
 [package]
 name = "octoscan"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "CLI security auditing tool orchestrating Nmap, Nuclei, ZAP and more"
 license = "MIT"
@@ -31,3 +31,6 @@ log = "0.4"
 
 # UUID for scan IDs
 uuid = { version = "1", features = ["v4"] }
+
+# Secure temp files
+tempfile = "3"

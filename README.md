@@ -1,11 +1,19 @@
-# 🐙 OctoScan
+```
+  ██████╗  ██████╗████████╗ ██████╗ ███████╗ ██████╗ █████╗ ███╗   ██╗
+ ██╔═══██╗██╔════╝╚══██╔══╝██╔═══██╗██╔════╝██╔════╝██╔══██╗████╗  ██║
+ ██║   ██║██║        ██║   ██║   ██║███████╗██║     ███████║██╔██╗ ██║
+ ██║   ██║██║        ██║   ██║   ██║╚════██║██║     ██╔══██║██║╚██╗██║
+ ╚██████╔╝╚██████╗   ██║   ╚██████╔╝███████║╚██████╗██║  ██║██║ ╚████║
+  ╚═════╝  ╚═════╝   ╚═╝    ╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
+```
 
-OctoScan is a CLI wrapper that orchestrates popular security tools (Nmap, Nuclei, ZAP, ...) for fast and automated web reconnaissance and auditing. It features an interactive terminal UI for navigating scans and results.
+OctoScan is a CLI wrapper that orchestrates popular security tools (Nmap, Nuclei, ZAP, Feroxbuster) for fast and automated web reconnaissance and auditing. It features an interactive terminal UI for navigating scans and results.
 
 ## Features
 
 - **Interactive TUI** — Navigate menus, select scanners, and browse results with keyboard shortcuts
-- **Multi-scanner orchestration** — Run Nmap, Nuclei, and ZAP from a single interface
+- **Multi-scanner orchestration** — Run Nmap, Nuclei, ZAP, and Feroxbuster from a single interface
+- **Parallel execution** — All selected scanners run simultaneously with live status indicators
 - **Auto-installation** — Automatically detects and installs missing tools on Windows, macOS, and Linux
 - **Structured findings** — Parsed results with severity levels (Critical, High, Medium, Low, Info)
 - **Export** — Save reports as JSON or TXT
@@ -21,8 +29,9 @@ OctoScan orchestrates the following security tools:
 | [Nmap](https://nmap.org/) | `apt install nmap` / `brew install nmap` / [nmap.org/download](https://nmap.org/download) |
 | [Nuclei](https://github.com/projectdiscovery/nuclei) | `go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest` |
 | [ZAP](https://www.zaproxy.org/) | `apt install zaproxy` / `brew install --cask zap` / [zaproxy.org/download](https://www.zaproxy.org/download/) |
+| [Feroxbuster](https://github.com/epi052/feroxbuster) | `apt install feroxbuster` / `brew install feroxbuster` / [GitHub Releases](https://github.com/epi052/feroxbuster/releases) |
 
-> **Note:** On Windows, OctoScan can **automatically install** missing tools when you press `i` on the tool check screen. It handles Npcap, VC++ 2013 runtime, Nmap, Nuclei, ZAP, and Java 17 dependencies.
+> **Note:** On Windows, OctoScan can **automatically install** missing tools when you press `i` on the tool check screen. It handles Npcap, VC++ 2013 runtime, Nmap, Nuclei, ZAP, Feroxbuster, and Java 17 dependencies.
 
 ## Installation
 
@@ -67,10 +76,10 @@ Launch the TUI and navigate with keyboard shortcuts:
 octoscan scan -t https://example.com -s nmap,nuclei
 
 # Scan and export to JSON
-octoscan scan -t https://example.com -s nmap,nuclei,zap -o report.json
+octoscan scan -t https://example.com -s nmap,nuclei,zap,feroxbuster -o report.json
 
 # Scan and export to TXT
-octoscan scan -t 192.168.1.1 -s nmap -o report.txt
+octoscan scan -t 192.168.1.1 -s nmap,feroxbuster -o report.txt
 ```
 
 ## Project Structure
@@ -89,7 +98,8 @@ src/
     ├── mod.rs        # Scanner trait & types
     ├── nmap.rs       # Nmap integration
     ├── nuclei.rs     # Nuclei integration
-    └── zap.rs        # ZAP integration
+    ├── zap.rs        # ZAP integration
+    └── feroxbuster.rs # Feroxbuster integration
 ```
 
 ## CI
@@ -99,7 +109,7 @@ GitHub Actions runs on every push/PR to `main`:
 - **Lint** — `cargo fmt --check` + `cargo clippy -D warnings`
 - **Audit** — `cargo audit` for dependency vulnerabilities
 - **SAST** — Semgrep static analysis with SARIF upload
-- **Build** — Release build on Linux and Windows
+- **Build** — Release build on Linux, Windows, and macOS
 
 ## ⚠️ Legal Disclaimer
 
