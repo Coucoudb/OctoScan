@@ -1,6 +1,10 @@
 pub mod feroxbuster;
+pub mod httpx;
 pub mod nmap;
 pub mod nuclei;
+pub mod sqlmap;
+pub mod subfinder;
+pub mod wpscan;
 pub mod zap;
 
 use anyhow::Result;
@@ -14,6 +18,10 @@ pub enum ScannerType {
     Nuclei,
     Zap,
     Feroxbuster,
+    Sqlmap,
+    Subfinder,
+    Httpx,
+    Wpscan,
 }
 
 impl std::fmt::Display for ScannerType {
@@ -23,6 +31,10 @@ impl std::fmt::Display for ScannerType {
             ScannerType::Nuclei => write!(f, "Nuclei"),
             ScannerType::Zap => write!(f, "ZAP"),
             ScannerType::Feroxbuster => write!(f, "Feroxbuster"),
+            ScannerType::Sqlmap => write!(f, "SQLMap"),
+            ScannerType::Subfinder => write!(f, "Subfinder"),
+            ScannerType::Httpx => write!(f, "httpx"),
+            ScannerType::Wpscan => write!(f, "WPScan"),
         }
     }
 }
@@ -36,6 +48,10 @@ impl FromStr for ScannerType {
             "nuclei" => Ok(ScannerType::Nuclei),
             "zap" => Ok(ScannerType::Zap),
             "feroxbuster" => Ok(ScannerType::Feroxbuster),
+            "sqlmap" => Ok(ScannerType::Sqlmap),
+            "subfinder" => Ok(ScannerType::Subfinder),
+            "httpx" => Ok(ScannerType::Httpx),
+            "wpscan" => Ok(ScannerType::Wpscan),
             _ => Err(format!("Unknown scanner: {}", s)),
         }
     }
@@ -88,6 +104,10 @@ pub async fn run_scanner(scanner_type: &ScannerType, target: &str) -> Result<Sca
         ScannerType::Nuclei => nuclei::run(target).await,
         ScannerType::Zap => zap::run(target).await,
         ScannerType::Feroxbuster => feroxbuster::run(target).await,
+        ScannerType::Sqlmap => sqlmap::run(target).await,
+        ScannerType::Subfinder => subfinder::run(target).await,
+        ScannerType::Httpx => httpx::run(target).await,
+        ScannerType::Wpscan => wpscan::run(target).await,
     }
 }
 
@@ -103,4 +123,107 @@ pub async fn check_tool(name: &str) -> bool {
     .await
     .map(|o| o.status.success())
     .unwrap_or(false)
+}
+
+/// Extract URLs from findings that look like SQL injection vulnerabilities
+pub fn extract_sqli_targets(results: &[ScanResult]) -> Vec<String> {
+    let sqli_keywords = [
+        "sql injection",
+        "sqli",
+        "sql-injection",
+        "sql_injection",
+        "blind sql",
+        "time-based sql",
+        "error-based sql",
+        "union-based sql",
+    ];
+
+    let mut targets = Vec::new();
+    for result in results {
+        if result.scanner != ScannerType::Zap && result.scanner != ScannerType::Nuclei {
+            continue;
+        }
+        for finding in &result.findings {
+            let title_lower = finding.title.to_lowercase();
+            let desc_lower = finding.description.to_lowercase();
+            if sqli_keywords
+                .iter()
+                .any(|kw| title_lower.contains(kw) || desc_lower.contains(kw))
+            {
+                // Extract URL from details field (where scanners typically store matched-at / endpoint)
+                let url = if finding.details.starts_with("http") {
+                    finding
+                        .details
+                        .split_whitespace()
+                        .next()
+                        .unwrap_or(&finding.details)
+                        .to_string()
+                } else if result.target.starts_with("http") {
+                    result.target.clone()
+                } else {
+                    continue;
+                };
+                if !targets.contains(&url) {
+                    targets.push(url);
+                }
+            }
+        }
+    }
+    targets
+}
+
+/// Extract discovered subdomains from Subfinder results
+pub fn extract_subdomains(results: &[ScanResult]) -> Vec<String> {
+    let mut subdomains = Vec::new();
+    for result in results {
+        if result.scanner == ScannerType::Subfinder && result.success {
+            for finding in &result.findings {
+                let sub = finding.details.trim();
+                if !sub.is_empty() && !subdomains.contains(&sub.to_string()) {
+                    subdomains.push(sub.to_string());
+                }
+            }
+        }
+    }
+    subdomains
+}
+
+/// Detect whether WordPress was found in scan results (httpx tech detection, nuclei, nmap, feroxbuster)
+pub fn detect_wordpress(results: &[ScanResult]) -> bool {
+    let wp_indicators = [
+        "wordpress",
+        "wp-content",
+        "wp-includes",
+        "wp-json",
+        "wp-login",
+        "wp-admin",
+    ];
+    for result in results {
+        if !result.success {
+            continue;
+        }
+        match result.scanner {
+            ScannerType::Httpx
+            | ScannerType::Nuclei
+            | ScannerType::Nmap
+            | ScannerType::Feroxbuster => {
+                let raw_lower = result.raw_output.to_lowercase();
+                if wp_indicators.iter().any(|kw| raw_lower.contains(kw)) {
+                    return true;
+                }
+                for finding in &result.findings {
+                    let combined = format!(
+                        "{} {} {}",
+                        finding.title, finding.description, finding.details
+                    )
+                    .to_lowercase();
+                    if wp_indicators.iter().any(|kw| combined.contains(kw)) {
+                        return true;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    false
 }

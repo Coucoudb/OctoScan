@@ -7,13 +7,20 @@
   ╚═════╝  ╚═════╝   ╚═╝    ╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 ```
 
-OctoScan is a CLI wrapper that orchestrates popular security tools (Nmap, Nuclei, ZAP, Feroxbuster) for fast and automated web reconnaissance and auditing. It features an interactive terminal UI for navigating scans and results.
+![Rust](https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white)
+![Open Source](https://img.shields.io/badge/Open%20Source-%E2%9D%A4-green?style=for-the-badge)
+![GitHub Stars](https://img.shields.io/github/stars/Coucoudb/OctoScan?style=for-the-badge&color=yellow)
+![Security Audit](https://img.shields.io/badge/Security-Audit-blue?style=for-the-badge&logo=opensourceinitiative&logoColor=white)
+![Bug Bounty](https://img.shields.io/badge/Bug%20Bounty-Tool-orange?style=for-the-badge&logo=hackerone&logoColor=white)
+
+OctoScan is a CLI wrapper that orchestrates popular security tools (Nmap, Nuclei, ZAP, Feroxbuster, SQLMap, Subfinder, httpx, WPScan) for fast and automated web reconnaissance and auditing. It features an interactive terminal UI for navigating scans and results.
 
 ## Features
 
 - **Interactive TUI** — Navigate menus, select scanners, and browse results with keyboard shortcuts
-- **Multi-scanner orchestration** — Run Nmap, Nuclei, ZAP, and Feroxbuster from a single interface
+- **Multi-scanner orchestration** — Run Nmap, Nuclei, ZAP, Feroxbuster, SQLMap, Subfinder, httpx, and WPScan from a single interface
 - **Parallel execution** — All selected scanners run simultaneously with live status indicators
+- **Smart SQLMap chaining** — Automatically runs SQLMap on endpoints where ZAP or Nuclei detected SQL injection
 - **Auto-installation** — Automatically detects and installs missing tools on Windows, macOS, and Linux
 - **Structured findings** — Parsed results with severity levels (Critical, High, Medium, Low, Info)
 - **Export** — Save reports as JSON or TXT
@@ -30,15 +37,19 @@ OctoScan orchestrates the following security tools:
 | [Nuclei](https://github.com/projectdiscovery/nuclei) | `go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest` |
 | [ZAP](https://www.zaproxy.org/) | `apt install zaproxy` / `brew install --cask zap` / [zaproxy.org/download](https://www.zaproxy.org/download/) |
 | [Feroxbuster](https://github.com/epi052/feroxbuster) | `apt install feroxbuster` / `brew install feroxbuster` / [GitHub Releases](https://github.com/epi052/feroxbuster/releases) |
+| [SQLMap](https://sqlmap.org/) | `apt install sqlmap` / `brew install sqlmap` / `pip install sqlmap` |
+| [Subfinder](https://github.com/projectdiscovery/subfinder) | `apt install subfinder` / `brew install subfinder` / [GitHub Releases](https://github.com/projectdiscovery/subfinder/releases) |
+| [httpx](https://github.com/projectdiscovery/httpx) | `apt install httpx` / `brew install httpx` / [GitHub Releases](https://github.com/projectdiscovery/httpx/releases) |
+| [WPScan](https://wpscan.com/) | `apt install wpscan` / `brew install wpscan` / `gem install wpscan` (requires Ruby) |
 
-> **Note:** On Windows, OctoScan can **automatically install** missing tools when you press `i` on the tool check screen. It handles Npcap, VC++ 2013 runtime, Nmap, Nuclei, ZAP, Feroxbuster, and Java 17 dependencies.
+> **Note:** On Windows, OctoScan can **automatically install** missing tools when you press `i` on the tool check screen. It handles Npcap, VC++ 2013 runtime, Nmap, Nuclei, ZAP, Feroxbuster, SQLMap, Subfinder, httpx, WPScan (Ruby + DevKit + libcurl), and Java 17 dependencies.
 
 ## Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-user/octoscan.git
-cd octoscan
+git clone https://github.com/Coucoudb/OctoScan.git
+cd OctoScan
 
 # Build
 cargo build --release
@@ -75,6 +86,12 @@ Launch the TUI and navigate with keyboard shortcuts:
 # Scan with specific scanners
 octoscan scan -t https://example.com -s nmap,nuclei
 
+# Subdomain enum + HTTP probing
+octoscan scan -t example.com -s subfinder,httpx
+
+# WordPress vulnerability scan
+octoscan scan -t https://example.com -s wpscan
+
 # Scan and export to JSON
 octoscan scan -t https://example.com -s nmap,nuclei,zap,feroxbuster -o report.json
 
@@ -99,7 +116,11 @@ src/
     ├── nmap.rs       # Nmap integration
     ├── nuclei.rs     # Nuclei integration
     ├── zap.rs        # ZAP integration
-    └── feroxbuster.rs # Feroxbuster integration
+    ├── feroxbuster.rs # Feroxbuster integration
+    ├── subfinder.rs  # Subfinder subdomain enumeration
+    ├── httpx.rs      # httpx HTTP probing & tech detection
+    ├── wpscan.rs     # WPScan WordPress vulnerability scanning
+    └── sqlmap.rs     # SQLMap integration (conditional, post-scan)
 ```
 
 ## CI
