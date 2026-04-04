@@ -9,7 +9,7 @@
 
 ![Rust](https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white)
 ![Open Source](https://img.shields.io/badge/Open%20Source-%E2%9D%A4-green?style=for-the-badge)
-![GitHub Stars](https://img.shields.io/github/stars/Coucoudb/OctoScan?style=for-the-badge)
+![GitHub Stars](https://img.shields.io/github/stars/Coucoudb/OctoScan?style=for-the-badge&color=yellow)
 ![Security Audit](https://img.shields.io/badge/Security-Audit-blue?style=for-the-badge&logo=opensourceinitiative&logoColor=white)
 ![Bug Bounty](https://img.shields.io/badge/Bug%20Bounty-Tool-orange?style=for-the-badge&logo=hackerone&logoColor=white)
 

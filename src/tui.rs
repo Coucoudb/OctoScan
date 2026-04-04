@@ -269,7 +269,7 @@ async fn run_event_loop(
                                 }
                             }
                             KeyCode::Down | KeyCode::Char('j') => {
-                                if app.scanner_cursor < 4 {
+                                if app.scanner_cursor < app.scanner_toggles.len() - 1 {
                                     app.scanner_cursor += 1;
                                 }
                             }

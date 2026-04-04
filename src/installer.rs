@@ -287,7 +287,7 @@ fn get_install_method(scanner: &ScannerType) -> Option<InstallMethod> {
         }
         ScannerType::Sqlmap => {
             if cfg!(target_os = "windows") {
-                Some(InstallMethod::ShellCmd("pip install sqlmap".to_string()))
+                Some(InstallMethod::PsScript(sqlmap_ps_script()))
             } else if cfg!(target_os = "macos") {
                 Some(InstallMethod::ShellCmd("brew install sqlmap".to_string()))
             } else {
@@ -571,6 +571,39 @@ fn feroxbuster_ps_script() -> String {
         "}",
         "",
         "Write-Host \"feroxbuster installed to $installDir\"",
+    ]
+    .join("\r\n")
+}
+
+fn sqlmap_ps_script() -> String {
+    [
+        "$ErrorActionPreference = 'Stop'",
+        "",
+        "# Install sqlmap via pip",
+        "pip install sqlmap",
+        "",
+        "# Find the Python user Scripts directory and add to PATH",
+        "$pyUserBase = & python -m site --user-site 2>$null",
+        "if ($pyUserBase) {",
+        "    $scriptsDir = Join-Path (Split-Path $pyUserBase) 'Scripts'",
+        "} else {",
+        "    # Fallback: common locations",
+        "    $scriptsDir = Get-ChildItem -Path \"$env:APPDATA\\Python\" -Filter 'sqlmap*' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1",
+        "    if ($scriptsDir) { $scriptsDir = $scriptsDir.DirectoryName }",
+        "}",
+        "",
+        "if ($scriptsDir -and (Test-Path $scriptsDir)) {",
+        "    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')",
+        "    if ($userPath -notlike \"*$scriptsDir*\") {",
+        "        [Environment]::SetEnvironmentVariable('Path', \"$userPath;$scriptsDir\", 'User')",
+        "        Write-Host \"Added $scriptsDir to user PATH\"",
+        "    } else {",
+        "        Write-Host \"$scriptsDir already in PATH\"",
+        "    }",
+        "    Write-Host \"sqlmap installed (scripts at $scriptsDir)\"",
+        "} else {",
+        "    Write-Host 'sqlmap installed but Scripts directory not found — you may need to add it to PATH manually'",
+        "}",
     ]
     .join("\r\n")
 }

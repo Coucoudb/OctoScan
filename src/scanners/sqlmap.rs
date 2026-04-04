@@ -28,9 +28,12 @@ pub async fn run(target: &str) -> Result<ScanResult> {
             "-u",
             target,
             "--batch",
-            "--level=2",
+            "--level=3", // test cookies, user-agent, referer
             "--risk=2",
             "--threads=4",
+            "--random-agent",     // randomize user-agent (WAF evasion)
+            "--smart",            // thorough tests only on positive heuristic
+            "--technique=BEUSTQ", // all injection techniques
             "--output-dir=-",
         ])
         .stdout(Stdio::piped())

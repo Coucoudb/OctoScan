@@ -23,7 +23,25 @@ pub async fn run(target: &str) -> Result<ScanResult> {
     }
 
     let output = Command::new("nuclei")
-        .args(["-u", target, "-jsonl", "-silent"])
+        .args([
+            "-u",
+            target,
+            "-jsonl",
+            "-silent",
+            "-as", // auto-update templates
+            "-severity",
+            "critical,high,medium,low", // skip info-only noise
+            "-c",
+            "50", // concurrency (templates)
+            "-rl",
+            "150", // rate limit (req/s)
+            "-timeout",
+            "10", // per-request timeout
+            "-retries",
+            "2", // retry on transient errors
+            "-tags",
+            "cve,exposure,misconfig,default-login,xss,sqli,rce,lfi,ssrf",
+        ])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()

@@ -32,6 +32,16 @@ pub async fn run(target: &str) -> Result<ScanResult> {
             "-title",
             "-tech-detect",
             "-follow-redirects",
+            "-threads",
+            "50", // concurrency
+            "-timeout",
+            "10",              // per-request timeout
+            "-cdn",            // detect CDN usage
+            "-ip",             // extract IP addresses
+            "-cname",          // extract CNAME records
+            "-content-length", // show response size
+            "-web-server",     // detect web server
+            "-location",       // show redirect location
         ])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

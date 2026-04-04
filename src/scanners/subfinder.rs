@@ -34,7 +34,12 @@ pub async fn run(target: &str) -> Result<ScanResult> {
         .unwrap_or(target);
 
     let output = Command::new("subfinder")
-        .args(["-d", domain, "-silent"])
+        .args([
+            "-d", domain, "-silent", "-all", // use all sources
+            "-t", "50", // threads
+            "-timeout", "30",  // timeout per source (seconds)
+            "-nW", // remove wildcard subdomains
+        ])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()

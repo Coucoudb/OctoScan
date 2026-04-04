@@ -30,6 +30,15 @@ pub async fn run(target: &str) -> Result<ScanResult> {
             "--no-state",
             "--auto-tune",
             "--json",
+            "-d",
+            "2", // recursion depth limit
+            "-t",
+            "50", // threads
+            "-k", // skip TLS cert verification
+            "--filter-status",
+            "404", // filter out 404s
+            "--timeout",
+            "10", // request timeout (seconds)
         ])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
