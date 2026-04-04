@@ -253,9 +253,10 @@ fn draw_scanner_select(f: &mut Frame, area: Rect, app: &App) {
             5,
             "ZAP — Web application security scanner",
         ),
+        (None, 6, "WPScan — WordPress vulnerability scanner"),
         (
             Some("Exploitation"),
-            6,
+            7,
             "SQLMap — SQL injection verification (runs after ZAP/Nuclei)",
         ),
     ];

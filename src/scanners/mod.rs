@@ -4,6 +4,7 @@ pub mod nmap;
 pub mod nuclei;
 pub mod sqlmap;
 pub mod subfinder;
+pub mod wpscan;
 pub mod zap;
 
 use anyhow::Result;
@@ -20,6 +21,7 @@ pub enum ScannerType {
     Sqlmap,
     Subfinder,
     Httpx,
+    Wpscan,
 }
 
 impl std::fmt::Display for ScannerType {
@@ -32,6 +34,7 @@ impl std::fmt::Display for ScannerType {
             ScannerType::Sqlmap => write!(f, "SQLMap"),
             ScannerType::Subfinder => write!(f, "Subfinder"),
             ScannerType::Httpx => write!(f, "httpx"),
+            ScannerType::Wpscan => write!(f, "WPScan"),
         }
     }
 }
@@ -48,6 +51,7 @@ impl FromStr for ScannerType {
             "sqlmap" => Ok(ScannerType::Sqlmap),
             "subfinder" => Ok(ScannerType::Subfinder),
             "httpx" => Ok(ScannerType::Httpx),
+            "wpscan" => Ok(ScannerType::Wpscan),
             _ => Err(format!("Unknown scanner: {}", s)),
         }
     }
@@ -103,6 +107,7 @@ pub async fn run_scanner(scanner_type: &ScannerType, target: &str) -> Result<Sca
         ScannerType::Sqlmap => sqlmap::run(target).await,
         ScannerType::Subfinder => subfinder::run(target).await,
         ScannerType::Httpx => httpx::run(target).await,
+        ScannerType::Wpscan => wpscan::run(target).await,
     }
 }
 

@@ -153,6 +153,13 @@ fn get_cmd_name(scanner: &ScannerType) -> &'static str {
         ScannerType::Sqlmap => "sqlmap",
         ScannerType::Subfinder => "subfinder",
         ScannerType::Httpx => "httpx",
+        ScannerType::Wpscan => {
+            if cfg!(target_os = "windows") {
+                "wpscan.bat"
+            } else {
+                "wpscan"
+            }
+        }
     }
 }
 
@@ -219,6 +226,15 @@ fn get_install_hint(scanner: &ScannerType) -> String {
                 "brew install httpx".to_string()
             } else {
                 "sudo apt install httpx  (or)  go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest".to_string()
+            }
+        }
+        ScannerType::Wpscan => {
+            if cfg!(target_os = "windows") {
+                "gem install wpscan  (requires Ruby)".to_string()
+            } else if cfg!(target_os = "macos") {
+                "brew install wpscan".to_string()
+            } else {
+                "sudo apt install wpscan  (or)  gem install wpscan".to_string()
             }
         }
     }
@@ -317,6 +333,17 @@ fn get_install_method(scanner: &ScannerType) -> Option<InstallMethod> {
             } else {
                 Some(InstallMethod::ShellCmd(
                     "sudo apt-get install -y httpx || go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest".to_string(),
+                ))
+            }
+        }
+        ScannerType::Wpscan => {
+            if cfg!(target_os = "windows") {
+                Some(InstallMethod::PsScript(wpscan_ps_script()))
+            } else if cfg!(target_os = "macos") {
+                Some(InstallMethod::ShellCmd("brew install wpscan".to_string()))
+            } else {
+                Some(InstallMethod::ShellCmd(
+                    "sudo apt-get install -y wpscan || gem install wpscan".to_string(),
                 ))
             }
         }
@@ -666,6 +693,105 @@ fn httpx_ps_script() -> String {
         "}",
         "",
         "Write-Host \"httpx installed to $installDir\"",
+    ]
+    .join("\r\n")
+}
+
+fn wpscan_ps_script() -> String {
+    [
+        "# NOTE: Do NOT use $ErrorActionPreference = 'Stop' here.",
+        "# ridk and pacman write status info to stderr which would abort the script.",
+        "",
+        "# Check if Ruby+DevKit is installed (ridk is the indicator for DevKit)",
+        "$rubyCheck = Get-Command ruby -ErrorAction SilentlyContinue",
+        "$ridkCheck = Get-Command ridk -ErrorAction SilentlyContinue",
+        "",
+        "if (-not $rubyCheck -or -not $ridkCheck) {",
+        "    if ($rubyCheck -and -not $ridkCheck) {",
+        "        Write-Host 'Ruby found but DevKit (ridk) is missing. Removing plain Ruby...'",
+        "        winget uninstall RubyInstallerTeam.Ruby.3.2 --accept-source-agreements --silent 2>$null",
+        "        winget uninstall RubyInstallerTeam.Ruby.3.3 --accept-source-agreements --silent 2>$null",
+        "    }",
+        "    Write-Host 'Installing Ruby+DevKit via winget (includes MSYS2)...'",
+        "    winget install --accept-package-agreements --accept-source-agreements RubyInstallerTeam.RubyWithDevKit.3.2",
+        "    if ($LASTEXITCODE -ne 0) { Write-Error 'winget install failed'; exit 1 }",
+        "    # Refresh PATH",
+        "    $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')",
+        "    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')",
+        "    $env:Path = \"$machinePath;$userPath\"",
+        "    $rubyCheck = Get-Command ruby -ErrorAction SilentlyContinue",
+        "    if (-not $rubyCheck) { Write-Error 'Ruby+DevKit installation failed'; exit 1 }",
+        "    Write-Host 'Ruby+DevKit installed successfully'",
+        "} else {",
+        "    Write-Host 'Ruby+DevKit already installed'",
+        "}",
+        "",
+        "# Run ridk install to set up MSYS2 toolchain (stderr output is normal, ignore errors)",
+        "$ridkCheck = Get-Command ridk -ErrorAction SilentlyContinue",
+        "if ($ridkCheck) {",
+        "    Write-Host 'Setting up MSYS2 toolchain (this may take a few minutes)...'",
+        "    $ridkOutput = & ridk install 3 2>&1 | Out-String",
+        "    Write-Host $ridkOutput",
+        "    Write-Host 'MSYS2 toolchain setup complete'",
+        "}",
+        "",
+        "# Install libcurl via MSYS2 (required by ethon/typhoeus gems)",
+        "Write-Host 'Installing libcurl via MSYS2...'",
+        "$pacmanOutput = & ridk exec pacman -S mingw-w64-ucrt-x86_64-curl --noconfirm 2>&1 | Out-String",
+        "Write-Host $pacmanOutput",
+        "",
+        "# Add MSYS2 ucrt64/bin to user PATH so libcurl.dll is always found",
+        "$rubyDir = Split-Path (Get-Command ruby).Source",
+        "$msys2Bin = Join-Path (Split-Path $rubyDir) 'msys64\\ucrt64\\bin'",
+        "if (Test-Path $msys2Bin) {",
+        "    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')",
+        "    if ($userPath -notlike \"*$msys2Bin*\") {",
+        "        [Environment]::SetEnvironmentVariable('Path', \"$userPath;$msys2Bin\", 'User')",
+        "        Write-Host \"Added $msys2Bin to user PATH\"",
+        "    }",
+        "    $env:Path = \"$env:Path;$msys2Bin\"",
+        "    # Create libcurl.dll alias — MSYS2 ships libcurl-4.dll but ethon/FFI loads 'curl' (libcurl.dll)",
+        "    $src = Join-Path $msys2Bin 'libcurl-4.dll'",
+        "    $dst = Join-Path $msys2Bin 'libcurl.dll'",
+        "    if ((Test-Path $src) -and -not (Test-Path $dst)) {",
+        "        Copy-Item $src $dst",
+        "        Write-Host 'Created libcurl.dll copy from libcurl-4.dll'",
+        "    }",
+        "    # Also set ETHON_CURL_LIB persistently so ethon always finds libcurl",
+        "    $curlDll = Join-Path $msys2Bin 'libcurl-4.dll'",
+        "    if (Test-Path $curlDll) {",
+        "        [Environment]::SetEnvironmentVariable('ETHON_CURL_LIB', $curlDll, 'User')",
+        "        $env:ETHON_CURL_LIB = $curlDll",
+        "        Write-Host \"Set ETHON_CURL_LIB=$curlDll\"",
+        "    }",
+        "} else {",
+        "    Write-Host 'WARNING: MSYS2 ucrt64/bin not found — libcurl may not be available'",
+        "}",
+        "",
+        "# Install wpscan gem",
+        "Write-Host 'Installing WPScan via gem (this may take a few minutes)...'",
+        "$gemOutput = & gem install wpscan --no-document 2>&1 | Out-String",
+        "Write-Host $gemOutput",
+        "",
+        "# Ensure gem bin directory is in PATH",
+        "$gemBin = & ruby -e \"puts Gem.bindir\" 2>$null",
+        "if ($gemBin -and (Test-Path $gemBin)) {",
+        "    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')",
+        "    if ($userPath -notlike \"*$gemBin*\") {",
+        "        [Environment]::SetEnvironmentVariable('Path', \"$userPath;$gemBin\", 'User')",
+        "        Write-Host \"Added $gemBin to user PATH\"",
+        "    }",
+        "    $env:Path = \"$env:Path;$gemBin\"",
+        "}",
+        "",
+        "# Final check",
+        "$finalCheck = Get-Command wpscan -ErrorAction SilentlyContinue",
+        "if ($finalCheck) {",
+        "    Write-Host \"WPScan installed at $($finalCheck.Source)\"",
+        "} else {",
+        "    Write-Error 'WPScan installation failed — wpscan not found in PATH'",
+        "    exit 1",
+        "}",
     ]
     .join("\r\n")
 }
