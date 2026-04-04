@@ -28,13 +28,14 @@ pub async fn run(target: &str) -> Result<ScanResult> {
             "-u",
             target,
             "--batch",
-            "--level=3", // test cookies, user-agent, referer
+            "--level=3",          // test cookies, user-agent, referer
             "--risk=2",
             "--threads=4",
             "--random-agent",     // randomize user-agent (WAF evasion)
             "--smart",            // thorough tests only on positive heuristic
             "--technique=BEUSTQ", // all injection techniques
-            "--output-dir=-",
+            "--crawl=3",          // crawl the site to discover injectable endpoints
+            "--forms",            // parse and test forms
         ])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -91,7 +92,8 @@ pub async fn run_on_targets(targets: &[String]) -> Result<ScanResult> {
                 "--level=2",
                 "--risk=2",
                 "--threads=4",
-                "--output-dir=-",
+                "--crawl=3",
+                "--forms",
             ])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
