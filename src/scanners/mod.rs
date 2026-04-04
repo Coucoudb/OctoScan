@@ -1,6 +1,7 @@
 pub mod feroxbuster;
 pub mod nmap;
 pub mod nuclei;
+pub mod sqlmap;
 pub mod zap;
 
 use anyhow::Result;
@@ -14,6 +15,7 @@ pub enum ScannerType {
     Nuclei,
     Zap,
     Feroxbuster,
+    Sqlmap,
 }
 
 impl std::fmt::Display for ScannerType {
@@ -23,6 +25,7 @@ impl std::fmt::Display for ScannerType {
             ScannerType::Nuclei => write!(f, "Nuclei"),
             ScannerType::Zap => write!(f, "ZAP"),
             ScannerType::Feroxbuster => write!(f, "Feroxbuster"),
+            ScannerType::Sqlmap => write!(f, "SQLMap"),
         }
     }
 }
@@ -36,6 +39,7 @@ impl FromStr for ScannerType {
             "nuclei" => Ok(ScannerType::Nuclei),
             "zap" => Ok(ScannerType::Zap),
             "feroxbuster" => Ok(ScannerType::Feroxbuster),
+            "sqlmap" => Ok(ScannerType::Sqlmap),
             _ => Err(format!("Unknown scanner: {}", s)),
         }
     }
@@ -88,6 +92,7 @@ pub async fn run_scanner(scanner_type: &ScannerType, target: &str) -> Result<Sca
         ScannerType::Nuclei => nuclei::run(target).await,
         ScannerType::Zap => zap::run(target).await,
         ScannerType::Feroxbuster => feroxbuster::run(target).await,
+        ScannerType::Sqlmap => sqlmap::run(target).await,
     }
 }
 
@@ -103,4 +108,51 @@ pub async fn check_tool(name: &str) -> bool {
     .await
     .map(|o| o.status.success())
     .unwrap_or(false)
+}
+
+/// Extract URLs from findings that look like SQL injection vulnerabilities
+pub fn extract_sqli_targets(results: &[ScanResult]) -> Vec<String> {
+    let sqli_keywords = [
+        "sql injection",
+        "sqli",
+        "sql-injection",
+        "sql_injection",
+        "blind sql",
+        "time-based sql",
+        "error-based sql",
+        "union-based sql",
+    ];
+
+    let mut targets = Vec::new();
+    for result in results {
+        if result.scanner != ScannerType::Zap && result.scanner != ScannerType::Nuclei {
+            continue;
+        }
+        for finding in &result.findings {
+            let title_lower = finding.title.to_lowercase();
+            let desc_lower = finding.description.to_lowercase();
+            if sqli_keywords
+                .iter()
+                .any(|kw| title_lower.contains(kw) || desc_lower.contains(kw))
+            {
+                // Extract URL from details field (where scanners typically store matched-at / endpoint)
+                let url = if finding.details.starts_with("http") {
+                    finding
+                        .details
+                        .split_whitespace()
+                        .next()
+                        .unwrap_or(&finding.details)
+                        .to_string()
+                } else if result.target.starts_with("http") {
+                    result.target.clone()
+                } else {
+                    continue;
+                };
+                if !targets.contains(&url) {
+                    targets.push(url);
+                }
+            }
+        }
+    }
+    targets
 }

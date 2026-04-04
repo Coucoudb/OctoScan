@@ -251,6 +251,11 @@ fn draw_scanner_select(f: &mut Frame, area: Rect, app: &App) {
             3,
             "ZAP — Web application security scanner",
         ),
+        (
+            Some("Exploitation"),
+            4,
+            "SQLMap — SQL injection verification (runs after ZAP/Nuclei)",
+        ),
     ];
 
     let mut items: Vec<ListItem> = Vec::new();

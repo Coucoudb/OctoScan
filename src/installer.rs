@@ -150,6 +150,7 @@ fn get_cmd_name(scanner: &ScannerType) -> &'static str {
             }
         }
         ScannerType::Feroxbuster => "feroxbuster",
+        ScannerType::Sqlmap => "sqlmap",
     }
 }
 
@@ -189,6 +190,15 @@ fn get_install_hint(scanner: &ScannerType) -> String {
                 "brew install feroxbuster".to_string()
             } else {
                 "sudo apt install feroxbuster  (or)  cargo install feroxbuster".to_string()
+            }
+        }
+        ScannerType::Sqlmap => {
+            if cfg!(target_os = "windows") {
+                "pip install sqlmap  (or)  https://sqlmap.org".to_string()
+            } else if cfg!(target_os = "macos") {
+                "brew install sqlmap".to_string()
+            } else {
+                "sudo apt install sqlmap  (or)  pip install sqlmap".to_string()
             }
         }
     }
@@ -252,6 +262,17 @@ fn get_install_method(scanner: &ScannerType) -> Option<InstallMethod> {
             } else {
                 Some(InstallMethod::ShellCmd(
                     "sudo apt-get install -y feroxbuster || cargo install feroxbuster".to_string(),
+                ))
+            }
+        }
+        ScannerType::Sqlmap => {
+            if cfg!(target_os = "windows") {
+                Some(InstallMethod::ShellCmd("pip install sqlmap".to_string()))
+            } else if cfg!(target_os = "macos") {
+                Some(InstallMethod::ShellCmd("brew install sqlmap".to_string()))
+            } else {
+                Some(InstallMethod::ShellCmd(
+                    "sudo apt-get install -y sqlmap || pip install sqlmap".to_string(),
                 ))
             }
         }

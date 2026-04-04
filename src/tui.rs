@@ -22,6 +22,9 @@ enum AppEvent {
     ScannerStarted(scanners::ScannerType),
     ScanResult(scanners::ScanResult),
     ScanDone,
+    // SQLMap post-scan
+    SqlmapResult(scanners::ScanResult),
+    SqlmapDone,
     // Tool check events
     ToolCheckDone(Vec<installer::ToolStatus>),
     // Install events
@@ -81,10 +84,8 @@ async fn run_event_loop(
                             app.started_at = Some(chrono::Utc::now());
                             app.screen = AppScreen::Scanning;
                             app.init_scanner_statuses();
-                            event_rx = Some(start_scan_task(
-                                app.target.clone(),
-                                app.selected_scanners.clone(),
-                            ));
+                            event_rx =
+                                Some(start_scan_task(app.target.clone(), app.parallel_scanners()));
                         } else {
                             // Some tools missing, show install prompt
                             app.screen = AppScreen::ToolCheck;
@@ -117,10 +118,8 @@ async fn run_event_loop(
                             app.started_at = Some(chrono::Utc::now());
                             app.screen = AppScreen::Scanning;
                             app.init_scanner_statuses();
-                            event_rx = Some(start_scan_task(
-                                app.target.clone(),
-                                app.selected_scanners.clone(),
-                            ));
+                            event_rx =
+                                Some(start_scan_task(app.target.clone(), app.parallel_scanners()));
                         }
                         break;
                     }
@@ -145,6 +144,47 @@ async fn run_event_loop(
                         app.current_scanner_index += 1;
                     }
                     AppEvent::ScanDone => {
+                        // Check if SQLMap should run
+                        if app.sqlmap_selected() {
+                            let sqli_targets = scanners::extract_sqli_targets(&app.results);
+                            if !sqli_targets.is_empty() {
+                                app.update_scanner_status(
+                                    &scanners::ScannerType::Sqlmap,
+                                    ScannerRunStatus::Running,
+                                );
+                                app.progress_message = format!(
+                                    "SQL injection detected — running SQLMap on {} endpoint(s)...",
+                                    sqli_targets.len()
+                                );
+                                event_rx = Some(start_sqlmap_task(sqli_targets));
+                                break;
+                            } else {
+                                // No SQL injection found, skip SQLMap
+                                app.update_scanner_status(
+                                    &scanners::ScannerType::Sqlmap,
+                                    ScannerRunStatus::Completed,
+                                );
+                                app.progress_message =
+                                    "No SQL injection detected — SQLMap skipped.".to_string();
+                            }
+                        }
+                        app.scan_status = ScanStatus::Completed;
+                        app.finished_at = Some(chrono::Utc::now());
+                        app.screen = AppScreen::Results;
+                        event_rx = None;
+                        break;
+                    }
+                    AppEvent::SqlmapResult(result) => {
+                        let status = if result.success {
+                            ScannerRunStatus::Completed
+                        } else {
+                            ScannerRunStatus::Failed
+                        };
+                        app.update_scanner_status(&scanners::ScannerType::Sqlmap, status);
+                        app.results.push(result);
+                        app.current_scanner_index += 1;
+                    }
+                    AppEvent::SqlmapDone => {
                         app.scan_status = ScanStatus::Completed;
                         app.finished_at = Some(chrono::Utc::now());
                         app.screen = AppScreen::Results;
@@ -229,7 +269,7 @@ async fn run_event_loop(
                                 }
                             }
                             KeyCode::Down | KeyCode::Char('j') => {
-                                if app.scanner_cursor < 3 {
+                                if app.scanner_cursor < 4 {
                                     app.scanner_cursor += 1;
                                 }
                             }
@@ -287,7 +327,7 @@ async fn run_event_loop(
                                     app.init_scanner_statuses();
                                     event_rx = Some(start_scan_task(
                                         app.target.clone(),
-                                        app.selected_scanners.clone(),
+                                        app.parallel_scanners(),
                                     ));
                                 }
                             }
@@ -475,6 +515,34 @@ fn start_scan_task(
             let _ = handle.await;
         }
         let _ = tx.send(AppEvent::ScanDone).await;
+    });
+
+    rx
+}
+
+fn start_sqlmap_task(targets: Vec<String>) -> mpsc::Receiver<AppEvent> {
+    let (tx, rx) = mpsc::channel(32);
+
+    tokio::spawn(async move {
+        match scanners::sqlmap::run_on_targets(&targets).await {
+            Ok(result) => {
+                let _ = tx.send(AppEvent::SqlmapResult(result)).await;
+            }
+            Err(e) => {
+                let result = scanners::ScanResult {
+                    scanner: scanners::ScannerType::Sqlmap,
+                    target: targets.join(", "),
+                    started_at: chrono::Utc::now(),
+                    finished_at: chrono::Utc::now(),
+                    raw_output: String::new(),
+                    findings: Vec::new(),
+                    success: false,
+                    error: Some(e.to_string()),
+                };
+                let _ = tx.send(AppEvent::SqlmapResult(result)).await;
+            }
+        }
+        let _ = tx.send(AppEvent::SqlmapDone).await;
     });
 
     rx

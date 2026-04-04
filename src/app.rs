@@ -37,7 +37,7 @@ pub struct App {
     pub target_input: String,
     pub selected_scanners: Vec<ScannerType>,
     pub scanner_cursor: usize,
-    pub scanner_toggles: [bool; 4],
+    pub scanner_toggles: [bool; 5],
     pub scan_status: ScanStatus,
     pub results: Vec<ScanResult>,
     pub current_scanner_index: usize,
@@ -71,7 +71,7 @@ impl App {
             target_input: target,
             selected_scanners: scanners,
             scanner_cursor: 0,
-            scanner_toggles: [false; 4],
+            scanner_toggles: [false; 5],
             scan_status: ScanStatus::Idle,
             results: Vec::new(),
             current_scanner_index: 0,
@@ -102,7 +102,7 @@ impl App {
             target_input: String::new(),
             selected_scanners: Vec::new(),
             scanner_cursor: 0,
-            scanner_toggles: [false; 4],
+            scanner_toggles: [false; 5],
             scan_status: ScanStatus::Idle,
             results: Vec::new(),
             current_scanner_index: 0,
@@ -138,6 +138,8 @@ impl App {
             ScannerType::Nuclei,
             // Web Application
             ScannerType::Zap,
+            // Exploitation
+            ScannerType::Sqlmap,
         ]
     }
 
@@ -165,6 +167,19 @@ impl App {
         self.started_at = Some(Utc::now());
         self.current_scanner_index = 0;
         self.results.clear();
+    }
+
+    pub fn sqlmap_selected(&self) -> bool {
+        self.selected_scanners.contains(&ScannerType::Sqlmap)
+    }
+
+    /// Get scanners to run in parallel (excludes Sqlmap which is conditional)
+    pub fn parallel_scanners(&self) -> Vec<ScannerType> {
+        self.selected_scanners
+            .iter()
+            .filter(|s| **s != ScannerType::Sqlmap)
+            .cloned()
+            .collect()
     }
 
     pub fn missing_tools(&self) -> Vec<&ToolStatus> {
