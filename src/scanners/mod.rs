@@ -1,3 +1,4 @@
+pub mod feroxbuster;
 pub mod nmap;
 pub mod nuclei;
 pub mod zap;
@@ -12,6 +13,7 @@ pub enum ScannerType {
     Nmap,
     Nuclei,
     Zap,
+    Feroxbuster,
 }
 
 impl std::fmt::Display for ScannerType {
@@ -20,6 +22,7 @@ impl std::fmt::Display for ScannerType {
             ScannerType::Nmap => write!(f, "Nmap"),
             ScannerType::Nuclei => write!(f, "Nuclei"),
             ScannerType::Zap => write!(f, "ZAP"),
+            ScannerType::Feroxbuster => write!(f, "Feroxbuster"),
         }
     }
 }
@@ -32,6 +35,7 @@ impl FromStr for ScannerType {
             "nmap" => Ok(ScannerType::Nmap),
             "nuclei" => Ok(ScannerType::Nuclei),
             "zap" => Ok(ScannerType::Zap),
+            "feroxbuster" => Ok(ScannerType::Feroxbuster),
             _ => Err(format!("Unknown scanner: {}", s)),
         }
     }
@@ -83,6 +87,7 @@ pub async fn run_scanner(scanner_type: &ScannerType, target: &str) -> Result<Sca
         ScannerType::Nmap => nmap::run(target).await,
         ScannerType::Nuclei => nuclei::run(target).await,
         ScannerType::Zap => zap::run(target).await,
+        ScannerType::Feroxbuster => feroxbuster::run(target).await,
     }
 }
 

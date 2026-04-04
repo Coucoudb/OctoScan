@@ -22,6 +22,14 @@ pub enum ScanStatus {
     Completed,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ScannerRunStatus {
+    Pending,
+    Running,
+    Completed,
+    Failed,
+}
+
 pub struct App {
     pub id: Uuid,
     pub screen: AppScreen,
@@ -29,7 +37,7 @@ pub struct App {
     pub target_input: String,
     pub selected_scanners: Vec<ScannerType>,
     pub scanner_cursor: usize,
-    pub scanner_toggles: [bool; 3],
+    pub scanner_toggles: [bool; 4],
     pub scan_status: ScanStatus,
     pub results: Vec<ScanResult>,
     pub current_scanner_index: usize,
@@ -49,6 +57,9 @@ pub struct App {
     pub install_scroll: u16,
     // Logging
     pub log_path: Option<String>,
+    // Per-scanner status tracking for parallel execution
+    pub scanner_statuses: Vec<(ScannerType, ScannerRunStatus)>,
+    pub spin_tick: usize,
 }
 
 impl App {
@@ -60,7 +71,7 @@ impl App {
             target_input: target,
             selected_scanners: scanners,
             scanner_cursor: 0,
-            scanner_toggles: [false; 3],
+            scanner_toggles: [false; 4],
             scan_status: ScanStatus::Idle,
             results: Vec::new(),
             current_scanner_index: 0,
@@ -78,6 +89,8 @@ impl App {
             install_progress: Vec::new(),
             install_scroll: 0,
             log_path: None,
+            scanner_statuses: Vec::new(),
+            spin_tick: 0,
         }
     }
 
@@ -89,7 +102,7 @@ impl App {
             target_input: String::new(),
             selected_scanners: Vec::new(),
             scanner_cursor: 0,
-            scanner_toggles: [false; 3],
+            scanner_toggles: [false; 4],
             scan_status: ScanStatus::Idle,
             results: Vec::new(),
             current_scanner_index: 0,
@@ -107,6 +120,8 @@ impl App {
             install_progress: Vec::new(),
             install_scroll: 0,
             log_path: None,
+            scanner_statuses: Vec::new(),
+            spin_tick: 0,
         }
     }
 
@@ -115,7 +130,15 @@ impl App {
     }
 
     pub fn all_scanner_types() -> Vec<ScannerType> {
-        vec![ScannerType::Nmap, ScannerType::Nuclei, ScannerType::Zap]
+        vec![
+            // Reconnaissance
+            ScannerType::Nmap,
+            ScannerType::Feroxbuster,
+            // Vulnerability Scanning
+            ScannerType::Nuclei,
+            // Web Application
+            ScannerType::Zap,
+        ]
     }
 
     pub fn toggle_scanner(&mut self, index: usize) {
@@ -150,5 +173,19 @@ impl App {
 
     pub fn all_tools_installed(&self) -> bool {
         self.tool_statuses.iter().all(|t| t.installed)
+    }
+
+    pub fn init_scanner_statuses(&mut self) {
+        self.scanner_statuses = self
+            .selected_scanners
+            .iter()
+            .map(|s| (s.clone(), ScannerRunStatus::Pending))
+            .collect();
+    }
+
+    pub fn update_scanner_status(&mut self, scanner: &ScannerType, status: ScannerRunStatus) {
+        if let Some(entry) = self.scanner_statuses.iter_mut().find(|(s, _)| s == scanner) {
+            entry.1 = status;
+        }
     }
 }

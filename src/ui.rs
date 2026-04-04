@@ -6,16 +6,19 @@ use ratatui::{
     Frame,
 };
 
-use crate::app::{App, AppScreen, ScanStatus};
+use crate::app::{App, AppScreen, ScanStatus, ScannerRunStatus};
 use crate::installer::InstallStatus;
 use crate::scanners::Severity;
 
+const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
 const OCTOSCAN_LOGO: &str = r#"
-   ____       __       _____                 
-  / __ \___  / /____  / ___/_________ _____ 
- / / / / _ \/ __/ _ \ \__ \/ ___/ __ `/ __ \
-/ /_/ /  __/ /_/ /_/ /___/ / /__/ /_/ / / / /
-\____/\___/\__/\____//____/\___/\__,_/_/ /_/ 
+  ██████╗  ██████╗████████╗ ██████╗ ███████╗ ██████╗ █████╗ ███╗   ██╗
+ ██╔═══██╗██╔════╝╚══██╔══╝██╔═══██╗██╔════╝██╔════╝██╔══██╗████╗  ██║
+ ██║   ██║██║        ██║   ██║   ██║███████╗██║     ███████║██╔██╗ ██║
+ ██║   ██║██║        ██║   ██║   ██║╚════██║██║     ██╔══██║██║╚██╗██║
+ ╚██████╔╝╚██████╗   ██║   ╚██████╔╝███████║╚██████╗██║  ██║██║ ╚████║
+  ╚═════╝  ╚═════╝   ╚═╝    ╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 "#;
 
 pub fn draw(f: &mut Frame, app: &App) {
@@ -130,7 +133,7 @@ fn draw_home(f: &mut Frame, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(7),
+            Constraint::Length(9),
             Constraint::Length(3),
             Constraint::Min(5),
         ])
@@ -231,32 +234,57 @@ fn draw_scanner_select(f: &mut Frame, area: Rect, app: &App) {
         .style(Style::default().fg(Color::White));
     f.render_widget(title, chunks[0]);
 
-    let scanner_names = [
-        "Nmap — Port scanning & service detection",
-        "Nuclei — Vulnerability scanning with templates",
-        "ZAP — Web application security scanner",
+    let scanner_entries: Vec<(Option<&str>, usize, &str)> = vec![
+        (
+            Some("Reconnaissance"),
+            0,
+            "Nmap — Port scanning & service detection",
+        ),
+        (None, 1, "Feroxbuster — Directory & content discovery"),
+        (
+            Some("Vulnerability Scanning"),
+            2,
+            "Nuclei — Vulnerability scanning with templates",
+        ),
+        (
+            Some("Web Application"),
+            3,
+            "ZAP — Web application security scanner",
+        ),
     ];
 
-    let items: Vec<ListItem> = scanner_names
-        .iter()
-        .enumerate()
-        .map(|(i, name)| {
-            let checkbox = if app.scanner_toggles[i] { "[x]" } else { "[ ]" };
-            let style = if i == app.scanner_cursor {
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(Color::White)
-            };
-            let prefix = if i == app.scanner_cursor {
-                "▸ "
-            } else {
-                "  "
-            };
-            ListItem::new(format!("{}{} {}", prefix, checkbox, name)).style(style)
-        })
-        .collect();
+    let mut items: Vec<ListItem> = Vec::new();
+    for (category, idx, name) in &scanner_entries {
+        if let Some(cat) = category {
+            items.push(
+                ListItem::new(Line::from(Span::styled(
+                    format!(" ── {} ──", cat),
+                    Style::default()
+                        .fg(Color::DarkGray)
+                        .add_modifier(Modifier::BOLD),
+                )))
+                .style(Style::default()),
+            );
+        }
+        let checkbox = if app.scanner_toggles[*idx] {
+            "[x]"
+        } else {
+            "[ ]"
+        };
+        let style = if app.scanner_cursor == *idx {
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::White)
+        };
+        let prefix = if app.scanner_cursor == *idx {
+            "▸ "
+        } else {
+            "  "
+        };
+        items.push(ListItem::new(format!("  {}{} {}", prefix, checkbox, name)).style(style));
+    }
 
     let list = List::new(items).block(
         Block::default()
@@ -278,16 +306,13 @@ fn draw_scanner_select(f: &mut Frame, area: Rect, app: &App) {
 fn draw_scanning(f: &mut Frame, area: Rect, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(5), Constraint::Min(5)])
+        .constraints([Constraint::Length(3), Constraint::Min(5)])
         .split(area);
 
     // Progress info
     let total = app.selected_scanners.len();
-    let current = app.current_scanner_index;
-    let progress_text = format!(
-        " Progress: {}/{} scanners completed\n\n {}",
-        current, total, app.progress_message
-    );
+    let completed = app.current_scanner_index;
+    let progress_text = format!(" Progress: {}/{} scanners completed", completed, total);
 
     let progress = Paragraph::new(progress_text)
         .style(Style::default().fg(Color::Yellow))
@@ -299,36 +324,66 @@ fn draw_scanning(f: &mut Frame, area: Rect, app: &App) {
         );
     f.render_widget(progress, chunks[0]);
 
-    // Show completed scanner results so far
+    // Show all scanners with their current status
+    let spinner_frame = SPINNER_FRAMES[app.spin_tick % SPINNER_FRAMES.len()];
+
     let items: Vec<ListItem> = app
-        .results
+        .scanner_statuses
         .iter()
-        .map(|r| {
-            let status_icon = if r.success { "✓" } else { "✗" };
-            let color = if r.success { Color::Green } else { Color::Red };
-            let findings_count = r.findings.len();
+        .map(|(scanner_type, status)| {
+            let (icon, color, detail) = match status {
+                ScannerRunStatus::Pending => {
+                    ("○".to_string(), Color::DarkGray, "Waiting...".to_string())
+                }
+                ScannerRunStatus::Running => (
+                    spinner_frame.to_string(),
+                    Color::Yellow,
+                    "Scanning...".to_string(),
+                ),
+                ScannerRunStatus::Completed => {
+                    let findings = app
+                        .results
+                        .iter()
+                        .find(|r| &r.scanner == scanner_type)
+                        .map(|r| format!("{} findings", r.findings.len()))
+                        .unwrap_or_else(|| "Done".to_string());
+                    ("✓".to_string(), Color::Green, findings)
+                }
+                ScannerRunStatus::Failed => {
+                    let error = app
+                        .results
+                        .iter()
+                        .find(|r| &r.scanner == scanner_type)
+                        .and_then(|r| r.error.clone())
+                        .unwrap_or_else(|| "Error".to_string());
+                    ("✗".to_string(), Color::Red, error)
+                }
+            };
 
             ListItem::new(Line::from(vec![
                 Span::styled(
-                    format!(" {} ", status_icon),
+                    format!(" {} ", icon),
                     Style::default().fg(color).add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(format!("{}", r.scanner), Style::default().fg(Color::White)),
                 Span::styled(
-                    format!(" — {} findings", findings_count),
+                    format!("{}", scanner_type),
+                    Style::default().fg(Color::White),
+                ),
+                Span::styled(
+                    format!(" — {}", detail),
                     Style::default().fg(Color::DarkGray),
                 ),
             ]))
         })
         .collect();
 
-    let results_list = List::new(items).block(
+    let scanner_list = List::new(items).block(
         Block::default()
-            .title(" Completed ")
+            .title(" Scanners ")
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::DarkGray)),
     );
-    f.render_widget(results_list, chunks[1]);
+    f.render_widget(scanner_list, chunks[1]);
 }
 
 fn draw_results(f: &mut Frame, area: Rect, app: &App) {
@@ -418,54 +473,59 @@ fn draw_results(f: &mut Frame, area: Rect, app: &App) {
                 );
             f.render_widget(raw_paragraph, chunks[2]);
         } else {
-            // Show findings as a list
-            let items: Vec<ListItem> = result
-                .findings
-                .iter()
-                .map(|finding| {
-                    let severity_color = match finding.severity {
-                        Severity::Critical => Color::Magenta,
-                        Severity::High => Color::Red,
-                        Severity::Medium => Color::Yellow,
-                        Severity::Low => Color::Blue,
-                        Severity::Info => Color::Gray,
-                    };
+            // Build findings as a single text block for scrolling + wrapping
+            let mut lines: Vec<Line> = Vec::new();
 
-                    ListItem::new(vec![
-                        Line::from(vec![
-                            Span::styled(
-                                format!(" [{}] ", finding.severity),
-                                Style::default()
-                                    .fg(severity_color)
-                                    .add_modifier(Modifier::BOLD),
-                            ),
-                            Span::styled(
-                                &finding.title,
-                                Style::default()
-                                    .fg(Color::White)
-                                    .add_modifier(Modifier::BOLD),
-                            ),
-                        ]),
-                        Line::from(vec![
-                            Span::raw("        "),
-                            Span::styled(&finding.description, Style::default().fg(Color::Gray)),
-                        ]),
-                        Line::from(vec![
-                            Span::raw("        "),
-                            Span::styled(&finding.details, Style::default().fg(Color::DarkGray)),
-                        ]),
-                        Line::from(""),
-                    ])
-                })
-                .collect();
+            for finding in &result.findings {
+                let severity_color = match finding.severity {
+                    Severity::Critical => Color::Magenta,
+                    Severity::High => Color::Red,
+                    Severity::Medium => Color::Yellow,
+                    Severity::Low => Color::Blue,
+                    Severity::Info => Color::Gray,
+                };
 
-            let findings_list = List::new(items).block(
-                Block::default()
-                    .title(format!(" Findings ({}) ", result.findings.len()))
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::DarkGray)),
-            );
-            f.render_widget(findings_list, chunks[2]);
+                lines.push(Line::from(vec![
+                    Span::styled(
+                        format!(" [{}] ", finding.severity),
+                        Style::default()
+                            .fg(severity_color)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        finding.title.clone(),
+                        Style::default()
+                            .fg(Color::White)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                ]));
+                lines.push(Line::from(vec![
+                    Span::raw("        "),
+                    Span::styled(
+                        finding.description.clone(),
+                        Style::default().fg(Color::Gray),
+                    ),
+                ]));
+                lines.push(Line::from(vec![
+                    Span::raw("        "),
+                    Span::styled(
+                        finding.details.clone(),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                ]));
+                lines.push(Line::from(""));
+            }
+
+            let findings_paragraph = Paragraph::new(lines)
+                .scroll((app.result_scroll, 0))
+                .wrap(Wrap { trim: false })
+                .block(
+                    Block::default()
+                        .title(format!(" Findings ({}) ", result.findings.len()))
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(Color::DarkGray)),
+                );
+            f.render_widget(findings_paragraph, chunks[2]);
         }
     }
 }

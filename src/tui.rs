@@ -2,6 +2,7 @@ use anyhow::Result;
 use crossterm::{
     event::{
         self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers,
+        MouseEventKind,
     },
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
@@ -11,14 +12,14 @@ use std::io;
 use std::time::Duration;
 use tokio::sync::mpsc;
 
-use crate::app::{App, AppScreen, ScanStatus};
+use crate::app::{App, AppScreen, ScanStatus, ScannerRunStatus};
 use crate::installer::{self, InstallStatus};
 use crate::scanners;
 use crate::ui;
 
 enum AppEvent {
     // Scan events
-    ScanProgress(String),
+    ScannerStarted(scanners::ScannerType),
     ScanResult(scanners::ScanResult),
     ScanDone,
     // Tool check events
@@ -79,6 +80,7 @@ async fn run_event_loop(
                             app.scan_status = ScanStatus::Running;
                             app.started_at = Some(chrono::Utc::now());
                             app.screen = AppScreen::Scanning;
+                            app.init_scanner_statuses();
                             event_rx = Some(start_scan_task(
                                 app.target.clone(),
                                 app.selected_scanners.clone(),
@@ -114,6 +116,7 @@ async fn run_event_loop(
                             app.scan_status = ScanStatus::Running;
                             app.started_at = Some(chrono::Utc::now());
                             app.screen = AppScreen::Scanning;
+                            app.init_scanner_statuses();
                             event_rx = Some(start_scan_task(
                                 app.target.clone(),
                                 app.selected_scanners.clone(),
@@ -121,10 +124,23 @@ async fn run_event_loop(
                         }
                         break;
                     }
-                    AppEvent::ScanProgress(msg) => {
-                        app.progress_message = msg;
+                    AppEvent::ScannerStarted(scanner_type) => {
+                        app.update_scanner_status(&scanner_type, ScannerRunStatus::Running);
+                        let running: Vec<String> = app
+                            .scanner_statuses
+                            .iter()
+                            .filter(|(_, s)| *s == ScannerRunStatus::Running)
+                            .map(|(t, _)| t.to_string())
+                            .collect();
+                        app.progress_message = format!("Running {}...", running.join(", "));
                     }
                     AppEvent::ScanResult(result) => {
+                        let status = if result.success {
+                            ScannerRunStatus::Completed
+                        } else {
+                            ScannerRunStatus::Failed
+                        };
+                        app.update_scanner_status(&result.scanner, status);
                         app.results.push(result);
                         app.current_scanner_index += 1;
                     }
@@ -139,213 +155,237 @@ async fn run_event_loop(
             }
         }
 
+        // Increment spinner animation tick
+        app.spin_tick = app.spin_tick.wrapping_add(1);
+
         // Poll for keyboard events
         if event::poll(Duration::from_millis(50))? {
-            if let Event::Key(key) = event::read()? {
-                // Ignore Release/Repeat events (fixes double input on Windows)
-                if key.kind != KeyEventKind::Press {
-                    continue;
-                }
-
-                if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
-                    app.should_quit = true;
-                }
-
-                if app.should_quit {
-                    break;
-                }
-
-                match app.screen {
-                    AppScreen::Home => match key.code {
-                        KeyCode::Char('s') | KeyCode::Enter => {
-                            app.screen = AppScreen::TargetInput;
-                        }
-                        KeyCode::Char('q') => {
-                            app.should_quit = true;
-                        }
-                        KeyCode::Char('h') => {
-                            app.show_help = !app.show_help;
-                        }
-                        _ => {}
-                    },
-
-                    AppScreen::TargetInput => match key.code {
-                        KeyCode::Char(c) => {
-                            app.target_input.push(c);
-                        }
-                        KeyCode::Backspace => {
-                            app.target_input.pop();
-                        }
-                        KeyCode::Enter => {
-                            if !app.target_input.is_empty() {
-                                app.screen = AppScreen::ScannerSelect;
+            match event::read()? {
+                Event::Mouse(mouse) => {
+                    if app.screen == AppScreen::Results {
+                        match mouse.kind {
+                            MouseEventKind::ScrollDown => {
+                                app.result_scroll = app.result_scroll.saturating_add(3);
                             }
-                        }
-                        KeyCode::Esc => {
-                            app.screen = AppScreen::Home;
-                        }
-                        _ => {}
-                    },
-
-                    AppScreen::ScannerSelect => match key.code {
-                        KeyCode::Up | KeyCode::Char('k') => {
-                            if app.scanner_cursor > 0 {
-                                app.scanner_cursor -= 1;
+                            MouseEventKind::ScrollUp => {
+                                app.result_scroll = app.result_scroll.saturating_sub(3);
                             }
-                        }
-                        KeyCode::Down | KeyCode::Char('j') => {
-                            if app.scanner_cursor < 2 {
-                                app.scanner_cursor += 1;
-                            }
-                        }
-                        KeyCode::Char(' ') => {
-                            app.toggle_scanner(app.scanner_cursor);
-                        }
-                        KeyCode::Enter => {
-                            let selected = app.get_selected_scanners();
-                            if !selected.is_empty() {
-                                app.start_scan();
-                                // Check tools before scanning
-                                app.screen = AppScreen::ToolCheck;
-                                app.progress_message = "Checking installed tools...".to_string();
-                                event_rx = Some(start_tool_check(app.selected_scanners.clone()));
-                            }
-                        }
-                        KeyCode::Esc => {
-                            app.screen = AppScreen::TargetInput;
-                        }
-                        _ => {}
-                    },
-
-                    AppScreen::ToolCheck => match key.code {
-                        KeyCode::Char('i') => {
-                            // Install all missing tools
-                            let missing: Vec<scanners::ScannerType> = app
-                                .missing_tools()
-                                .iter()
-                                .map(|t| t.scanner.clone())
-                                .collect();
-                            if !missing.is_empty() {
-                                app.screen = AppScreen::Installing;
-                                app.install_progress.clear();
-                                app.progress_message = "Installing tools...".to_string();
-                                event_rx = Some(start_install_task(missing));
-                            }
-                        }
-                        KeyCode::Char('s') => {
-                            // Skip missing tools, scan with available ones only
-                            let available: Vec<scanners::ScannerType> = app
-                                .tool_statuses
-                                .iter()
-                                .filter(|t| t.installed)
-                                .map(|t| t.scanner.clone())
-                                .collect();
-                            if available.is_empty() {
-                                app.progress_message = "No scanners available!".to_string();
-                            } else {
-                                app.selected_scanners = available;
-                                app.scan_status = ScanStatus::Running;
-                                app.started_at = Some(chrono::Utc::now());
-                                app.screen = AppScreen::Scanning;
-                                event_rx = Some(start_scan_task(
-                                    app.target.clone(),
-                                    app.selected_scanners.clone(),
-                                ));
-                            }
-                        }
-                        KeyCode::Char('q') | KeyCode::Esc => {
-                            app.should_quit = true;
-                        }
-                        _ => {}
-                    },
-
-                    AppScreen::Installing => match key.code {
-                        KeyCode::Down | KeyCode::Char('j') => {
-                            app.install_scroll = app.install_scroll.saturating_add(1);
-                        }
-                        KeyCode::Up | KeyCode::Char('k') => {
-                            app.install_scroll = app.install_scroll.saturating_sub(1);
-                        }
-                        KeyCode::Char('q') => {
-                            app.should_quit = true;
-                        }
-                        _ => {}
-                    },
-
-                    AppScreen::Scanning => {
-                        if let KeyCode::Char('q') = key.code {
-                            app.should_quit = true;
+                            _ => {}
                         }
                     }
+                }
+                Event::Key(key) => {
+                    // Ignore Release/Repeat events (fixes double input on Windows)
+                    if key.kind != KeyEventKind::Press {
+                        continue;
+                    }
 
-                    AppScreen::Results => match key.code {
-                        KeyCode::Char('q') => {
-                            app.should_quit = true;
-                        }
-                        KeyCode::Tab => {
-                            if !app.results.is_empty() {
-                                app.result_tab = (app.result_tab + 1) % app.results.len();
-                                app.result_scroll = 0;
-                            }
-                        }
-                        KeyCode::BackTab => {
-                            if !app.results.is_empty() {
-                                app.result_tab = if app.result_tab == 0 {
-                                    app.results.len() - 1
-                                } else {
-                                    app.result_tab - 1
-                                };
-                                app.result_scroll = 0;
-                            }
-                        }
-                        KeyCode::Down | KeyCode::Char('j') => {
-                            app.result_scroll = app.result_scroll.saturating_add(1);
-                        }
-                        KeyCode::Up | KeyCode::Char('k') => {
-                            app.result_scroll = app.result_scroll.saturating_sub(1);
-                        }
-                        KeyCode::Char('e') => {
-                            app.screen = AppScreen::Export;
-                        }
-                        KeyCode::Char('n') => {
-                            app.screen = AppScreen::TargetInput;
-                            app.results.clear();
-                            app.scan_status = ScanStatus::Idle;
-                        }
-                        _ => {}
-                    },
+                    if key.modifiers.contains(KeyModifiers::CONTROL)
+                        && key.code == KeyCode::Char('c')
+                    {
+                        app.should_quit = true;
+                    }
 
-                    AppScreen::Export => match key.code {
-                        KeyCode::Char(c) => {
-                            app.export_input.push(c);
-                        }
-                        KeyCode::Backspace => {
-                            app.export_input.pop();
-                        }
-                        KeyCode::Up | KeyCode::Down => {
-                            app.export_cursor = if app.export_cursor == 0 { 1 } else { 0 };
-                        }
-                        KeyCode::Enter => {
-                            let path = app.export_input.clone();
-                            if !path.is_empty() {
-                                match crate::export::export_results(app, &path) {
-                                    Ok(_) => {
-                                        app.progress_message = format!("Exported to {}", path);
-                                    }
-                                    Err(e) => {
-                                        app.progress_message = format!("Export failed: {}", e);
-                                    }
+                    if app.should_quit {
+                        break;
+                    }
+
+                    match app.screen {
+                        AppScreen::Home => match key.code {
+                            KeyCode::Char('s') | KeyCode::Enter => {
+                                app.screen = AppScreen::TargetInput;
+                            }
+                            KeyCode::Char('q') => {
+                                app.should_quit = true;
+                            }
+                            KeyCode::Char('h') => {
+                                app.show_help = !app.show_help;
+                            }
+                            _ => {}
+                        },
+
+                        AppScreen::TargetInput => match key.code {
+                            KeyCode::Char(c) => {
+                                app.target_input.push(c);
+                            }
+                            KeyCode::Backspace => {
+                                app.target_input.pop();
+                            }
+                            KeyCode::Enter => {
+                                if !app.target_input.is_empty() {
+                                    app.screen = AppScreen::ScannerSelect;
                                 }
+                            }
+                            KeyCode::Esc => {
+                                app.screen = AppScreen::Home;
+                            }
+                            _ => {}
+                        },
+
+                        AppScreen::ScannerSelect => match key.code {
+                            KeyCode::Up | KeyCode::Char('k') => {
+                                if app.scanner_cursor > 0 {
+                                    app.scanner_cursor -= 1;
+                                }
+                            }
+                            KeyCode::Down | KeyCode::Char('j') => {
+                                if app.scanner_cursor < 3 {
+                                    app.scanner_cursor += 1;
+                                }
+                            }
+                            KeyCode::Char(' ') => {
+                                app.toggle_scanner(app.scanner_cursor);
+                            }
+                            KeyCode::Enter => {
+                                let selected = app.get_selected_scanners();
+                                if !selected.is_empty() {
+                                    app.start_scan();
+                                    // Check tools before scanning
+                                    app.screen = AppScreen::ToolCheck;
+                                    app.progress_message =
+                                        "Checking installed tools...".to_string();
+                                    event_rx =
+                                        Some(start_tool_check(app.selected_scanners.clone()));
+                                }
+                            }
+                            KeyCode::Esc => {
+                                app.screen = AppScreen::TargetInput;
+                            }
+                            _ => {}
+                        },
+
+                        AppScreen::ToolCheck => match key.code {
+                            KeyCode::Char('i') => {
+                                // Install all missing tools
+                                let missing: Vec<scanners::ScannerType> = app
+                                    .missing_tools()
+                                    .iter()
+                                    .map(|t| t.scanner.clone())
+                                    .collect();
+                                if !missing.is_empty() {
+                                    app.screen = AppScreen::Installing;
+                                    app.install_progress.clear();
+                                    app.progress_message = "Installing tools...".to_string();
+                                    event_rx = Some(start_install_task(missing));
+                                }
+                            }
+                            KeyCode::Char('s') => {
+                                // Skip missing tools, scan with available ones only
+                                let available: Vec<scanners::ScannerType> = app
+                                    .tool_statuses
+                                    .iter()
+                                    .filter(|t| t.installed)
+                                    .map(|t| t.scanner.clone())
+                                    .collect();
+                                if available.is_empty() {
+                                    app.progress_message = "No scanners available!".to_string();
+                                } else {
+                                    app.selected_scanners = available;
+                                    app.scan_status = ScanStatus::Running;
+                                    app.started_at = Some(chrono::Utc::now());
+                                    app.screen = AppScreen::Scanning;
+                                    app.init_scanner_statuses();
+                                    event_rx = Some(start_scan_task(
+                                        app.target.clone(),
+                                        app.selected_scanners.clone(),
+                                    ));
+                                }
+                            }
+                            KeyCode::Char('q') | KeyCode::Esc => {
+                                app.should_quit = true;
+                            }
+                            _ => {}
+                        },
+
+                        AppScreen::Installing => match key.code {
+                            KeyCode::Down | KeyCode::Char('j') => {
+                                app.install_scroll = app.install_scroll.saturating_add(1);
+                            }
+                            KeyCode::Up | KeyCode::Char('k') => {
+                                app.install_scroll = app.install_scroll.saturating_sub(1);
+                            }
+                            KeyCode::Char('q') => {
+                                app.should_quit = true;
+                            }
+                            _ => {}
+                        },
+
+                        AppScreen::Scanning => {
+                            if let KeyCode::Char('q') = key.code {
+                                app.should_quit = true;
+                            }
+                        }
+
+                        AppScreen::Results => match key.code {
+                            KeyCode::Char('q') => {
+                                app.should_quit = true;
+                            }
+                            KeyCode::Tab => {
+                                if !app.results.is_empty() {
+                                    app.result_tab = (app.result_tab + 1) % app.results.len();
+                                    app.result_scroll = 0;
+                                }
+                            }
+                            KeyCode::BackTab => {
+                                if !app.results.is_empty() {
+                                    app.result_tab = if app.result_tab == 0 {
+                                        app.results.len() - 1
+                                    } else {
+                                        app.result_tab - 1
+                                    };
+                                    app.result_scroll = 0;
+                                }
+                            }
+                            KeyCode::Down | KeyCode::Char('j') => {
+                                app.result_scroll = app.result_scroll.saturating_add(1);
+                            }
+                            KeyCode::Up | KeyCode::Char('k') => {
+                                app.result_scroll = app.result_scroll.saturating_sub(1);
+                            }
+                            KeyCode::Char('e') => {
+                                app.screen = AppScreen::Export;
+                            }
+                            KeyCode::Char('n') => {
+                                app.screen = AppScreen::TargetInput;
+                                app.results.clear();
+                                app.scan_status = ScanStatus::Idle;
+                            }
+                            _ => {}
+                        },
+
+                        AppScreen::Export => match key.code {
+                            KeyCode::Char(c) => {
+                                app.export_input.push(c);
+                            }
+                            KeyCode::Backspace => {
+                                app.export_input.pop();
+                            }
+                            KeyCode::Up | KeyCode::Down => {
+                                app.export_cursor = if app.export_cursor == 0 { 1 } else { 0 };
+                            }
+                            KeyCode::Enter => {
+                                let path = app.export_input.clone();
+                                if !path.is_empty() {
+                                    match crate::export::export_results(app, &path) {
+                                        Ok(_) => {
+                                            app.progress_message = format!("Exported to {}", path);
+                                        }
+                                        Err(e) => {
+                                            app.progress_message = format!("Export failed: {}", e);
+                                        }
+                                    }
+                                    app.screen = AppScreen::Results;
+                                }
+                            }
+                            KeyCode::Esc => {
                                 app.screen = AppScreen::Results;
                             }
-                        }
-                        KeyCode::Esc => {
-                            app.screen = AppScreen::Results;
-                        }
-                        _ => {}
-                    },
-                }
-            }
+                            _ => {}
+                        },
+                    }
+                } // Event::Key
+                _ => {}
+            } // match event
         }
 
         if app.should_quit {
@@ -398,32 +438,41 @@ fn start_scan_task(
     let (tx, rx) = mpsc::channel(32);
 
     tokio::spawn(async move {
-        for scanner_type in &scanner_types {
-            let _ = tx
-                .send(AppEvent::ScanProgress(format!(
-                    "Running {} on {}...",
-                    scanner_type, target
-                )))
-                .await;
+        let mut handles = Vec::new();
 
-            match scanners::run_scanner(scanner_type, &target).await {
-                Ok(result) => {
-                    let _ = tx.send(AppEvent::ScanResult(result)).await;
+        for scanner_type in scanner_types {
+            let tx = tx.clone();
+            let target = target.clone();
+
+            let handle = tokio::spawn(async move {
+                let _ = tx
+                    .send(AppEvent::ScannerStarted(scanner_type.clone()))
+                    .await;
+
+                match scanners::run_scanner(&scanner_type, &target).await {
+                    Ok(result) => {
+                        let _ = tx.send(AppEvent::ScanResult(result)).await;
+                    }
+                    Err(e) => {
+                        let result = scanners::ScanResult {
+                            scanner: scanner_type.clone(),
+                            target: target.clone(),
+                            started_at: chrono::Utc::now(),
+                            finished_at: chrono::Utc::now(),
+                            raw_output: String::new(),
+                            findings: Vec::new(),
+                            success: false,
+                            error: Some(e.to_string()),
+                        };
+                        let _ = tx.send(AppEvent::ScanResult(result)).await;
+                    }
                 }
-                Err(e) => {
-                    let result = scanners::ScanResult {
-                        scanner: scanner_type.clone(),
-                        target: target.clone(),
-                        started_at: chrono::Utc::now(),
-                        finished_at: chrono::Utc::now(),
-                        raw_output: String::new(),
-                        findings: Vec::new(),
-                        success: false,
-                        error: Some(e.to_string()),
-                    };
-                    let _ = tx.send(AppEvent::ScanResult(result)).await;
-                }
-            }
+            });
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            let _ = handle.await;
         }
         let _ = tx.send(AppEvent::ScanDone).await;
     });
