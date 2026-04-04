@@ -171,3 +171,59 @@ pub fn extract_sqli_targets(results: &[ScanResult]) -> Vec<String> {
     }
     targets
 }
+
+/// Extract discovered subdomains from Subfinder results
+pub fn extract_subdomains(results: &[ScanResult]) -> Vec<String> {
+    let mut subdomains = Vec::new();
+    for result in results {
+        if result.scanner == ScannerType::Subfinder && result.success {
+            for finding in &result.findings {
+                let sub = finding.details.trim();
+                if !sub.is_empty() && !subdomains.contains(&sub.to_string()) {
+                    subdomains.push(sub.to_string());
+                }
+            }
+        }
+    }
+    subdomains
+}
+
+/// Detect whether WordPress was found in scan results (httpx tech detection, nuclei, nmap, feroxbuster)
+pub fn detect_wordpress(results: &[ScanResult]) -> bool {
+    let wp_indicators = [
+        "wordpress",
+        "wp-content",
+        "wp-includes",
+        "wp-json",
+        "wp-login",
+        "wp-admin",
+    ];
+    for result in results {
+        if !result.success {
+            continue;
+        }
+        match result.scanner {
+            ScannerType::Httpx
+            | ScannerType::Nuclei
+            | ScannerType::Nmap
+            | ScannerType::Feroxbuster => {
+                let raw_lower = result.raw_output.to_lowercase();
+                if wp_indicators.iter().any(|kw| raw_lower.contains(kw)) {
+                    return true;
+                }
+                for finding in &result.findings {
+                    let combined = format!(
+                        "{} {} {}",
+                        finding.title, finding.description, finding.details
+                    )
+                    .to_lowercase();
+                    if wp_indicators.iter().any(|kw| combined.contains(kw)) {
+                        return true;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    false
+}

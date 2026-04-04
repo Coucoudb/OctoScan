@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
 use std::process::Stdio;
+use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 
 use super::{check_tool, Finding, ScanResult, ScannerType, Severity};
@@ -125,4 +126,91 @@ fn parse_httpx_output(output: &str) -> Vec<Finding> {
     }
 
     findings
+}
+
+/// Run httpx on a list of targets (e.g. subdomains from Subfinder) via stdin pipe
+pub async fn run_list(targets: &[String]) -> Result<ScanResult> {
+    let started_at = Utc::now();
+    let combined_target = format!("{} subdomains", targets.len());
+
+    if !check_tool("httpx").await {
+        let finished_at = Utc::now();
+        return Ok(ScanResult {
+            scanner: ScannerType::Httpx,
+            target: combined_target,
+            started_at,
+            finished_at,
+            raw_output: String::new(),
+            findings: Vec::new(),
+            success: false,
+            error: Some("httpx is not installed or not in PATH".to_string()),
+        });
+    }
+
+    let mut child = Command::new("httpx")
+        .args([
+            "-silent",
+            "-json",
+            "-status-code",
+            "-title",
+            "-tech-detect",
+            "-follow-redirects",
+            "-threads",
+            "50",
+            "-timeout",
+            "10",
+            "-cdn",
+            "-ip",
+            "-cname",
+            "-content-length",
+            "-web-server",
+            "-location",
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("Failed to spawn httpx")?;
+
+    // Write all targets to httpx stdin
+    if let Some(mut stdin) = child.stdin.take() {
+        let input = targets.join("\n");
+        stdin.write_all(input.as_bytes()).await?;
+        // stdin is dropped here, closing the pipe so httpx starts processing
+    }
+
+    let output = child
+        .wait_with_output()
+        .await
+        .context("Failed to wait for httpx")?;
+
+    let finished_at = Utc::now();
+    let raw_output = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+    if !output.status.success() && raw_output.is_empty() {
+        return Ok(ScanResult {
+            scanner: ScannerType::Httpx,
+            target: combined_target,
+            started_at,
+            finished_at,
+            raw_output: format!("{}\n{}", raw_output, stderr),
+            findings: Vec::new(),
+            success: false,
+            error: Some(format!("httpx exited with status: {}", output.status)),
+        });
+    }
+
+    let findings = parse_httpx_output(&raw_output);
+
+    Ok(ScanResult {
+        scanner: ScannerType::Httpx,
+        target: combined_target,
+        started_at,
+        finished_at,
+        raw_output,
+        findings,
+        success: true,
+        error: None,
+    })
 }

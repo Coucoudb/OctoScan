@@ -22,6 +22,11 @@ enum AppEvent {
     ScannerStarted(scanners::ScannerType),
     ScanResult(scanners::ScanResult),
     ScanDone,
+    // Chained scan events (smart pipelines)
+    HttpxChainResult(scanners::ScanResult),
+    HttpxChainDone,
+    WpscanChainResult(scanners::ScanResult),
+    WpscanChainDone,
     // SQLMap post-scan
     SqlmapResult(scanners::ScanResult),
     SqlmapDone,
@@ -144,7 +149,47 @@ async fn run_event_loop(
                         app.current_scanner_index += 1;
                     }
                     AppEvent::ScanDone => {
-                        // Check if SQLMap should run
+                        // === Smart Pipeline: Subfinder → httpx chain ===
+                        let subdomains = scanners::extract_subdomains(&app.results);
+                        let httpx_already_ran = app
+                            .results
+                            .iter()
+                            .any(|r| r.scanner == scanners::ScannerType::Httpx);
+                        let httpx_available = scanners::check_tool("httpx").await;
+
+                        if !subdomains.is_empty() && !httpx_already_ran && httpx_available {
+                            app.progress_message = format!(
+                                "Smart chain: probing {} subdomains with httpx...",
+                                subdomains.len()
+                            );
+                            event_rx = Some(start_httpx_chain_task(subdomains));
+                            break;
+                        }
+
+                        // === Smart Pipeline: WordPress detection → WPScan chain ===
+                        let wp_detected = scanners::detect_wordpress(&app.results);
+                        let wpscan_already_ran = app
+                            .results
+                            .iter()
+                            .any(|r| r.scanner == scanners::ScannerType::Wpscan);
+                        let wpscan_available =
+                            scanners::check_tool(if cfg!(target_os = "windows") {
+                                "wpscan.bat"
+                            } else {
+                                "wpscan"
+                            })
+                            .await;
+
+                        if wp_detected && !wpscan_already_ran && wpscan_available {
+                            app.progress_message =
+                                "WordPress detected — auto-running WPScan...".to_string();
+                            app.scanner_statuses
+                                .push((scanners::ScannerType::Wpscan, ScannerRunStatus::Running));
+                            event_rx = Some(start_wpscan_chain_task(app.target.clone()));
+                            break;
+                        }
+
+                        // === Smart Pipeline: SQLi → SQLMap chain (existing) ===
                         if app.sqlmap_selected() {
                             let sqli_targets = scanners::extract_sqli_targets(&app.results);
                             if !sqli_targets.is_empty() {
@@ -159,7 +204,6 @@ async fn run_event_loop(
                                 event_rx = Some(start_sqlmap_task(sqli_targets));
                                 break;
                             } else {
-                                // No SQL injection found, skip SQLMap
                                 app.update_scanner_status(
                                     &scanners::ScannerType::Sqlmap,
                                     ScannerRunStatus::Completed,
@@ -168,6 +212,94 @@ async fn run_event_loop(
                                     "No SQL injection detected — SQLMap skipped.".to_string();
                             }
                         }
+                        app.scan_status = ScanStatus::Completed;
+                        app.finished_at = Some(chrono::Utc::now());
+                        app.screen = AppScreen::Results;
+                        event_rx = None;
+                        break;
+                    }
+
+                    // === httpx chain completed ===
+                    AppEvent::HttpxChainResult(result) => {
+                        app.results.push(result);
+                    }
+                    AppEvent::HttpxChainDone => {
+                        // After httpx chain, check for WordPress and SQLi chains
+                        let wp_detected = scanners::detect_wordpress(&app.results);
+                        let wpscan_already_ran = app
+                            .results
+                            .iter()
+                            .any(|r| r.scanner == scanners::ScannerType::Wpscan);
+                        let wpscan_available =
+                            scanners::check_tool(if cfg!(target_os = "windows") {
+                                "wpscan.bat"
+                            } else {
+                                "wpscan"
+                            })
+                            .await;
+
+                        if wp_detected && !wpscan_already_ran && wpscan_available {
+                            app.progress_message =
+                                "WordPress detected — auto-running WPScan...".to_string();
+                            app.scanner_statuses
+                                .push((scanners::ScannerType::Wpscan, ScannerRunStatus::Running));
+                            event_rx = Some(start_wpscan_chain_task(app.target.clone()));
+                            break;
+                        }
+
+                        if app.sqlmap_selected() {
+                            let sqli_targets = scanners::extract_sqli_targets(&app.results);
+                            if !sqli_targets.is_empty() {
+                                app.update_scanner_status(
+                                    &scanners::ScannerType::Sqlmap,
+                                    ScannerRunStatus::Running,
+                                );
+                                app.progress_message = format!(
+                                    "SQL injection detected — running SQLMap on {} endpoint(s)...",
+                                    sqli_targets.len()
+                                );
+                                event_rx = Some(start_sqlmap_task(sqli_targets));
+                                break;
+                            }
+                        }
+
+                        app.scan_status = ScanStatus::Completed;
+                        app.finished_at = Some(chrono::Utc::now());
+                        app.screen = AppScreen::Results;
+                        event_rx = None;
+                        break;
+                    }
+
+                    // === WPScan chain completed ===
+                    AppEvent::WpscanChainResult(result) => {
+                        app.update_scanner_status(
+                            &scanners::ScannerType::Wpscan,
+                            if result.success {
+                                ScannerRunStatus::Completed
+                            } else {
+                                ScannerRunStatus::Failed
+                            },
+                        );
+                        app.results.push(result);
+                    }
+                    AppEvent::WpscanChainDone => {
+                        // After WPScan chain, check SQLi chain
+                        if app.sqlmap_selected() {
+                            let sqli_targets = scanners::extract_sqli_targets(&app.results);
+                            if !sqli_targets.is_empty() {
+                                app.update_scanner_status(
+                                    &scanners::ScannerType::Sqlmap,
+                                    ScannerRunStatus::Running,
+                                );
+                                app.progress_message = format!(
+                                    "SQL injection detected — running SQLMap on {} endpoint(s)...",
+                                    sqli_targets.len()
+                                );
+                                event_rx = Some(start_sqlmap_task(sqli_targets));
+                                break;
+                            }
+                        }
+
                         app.scan_status = ScanStatus::Completed;
                         app.finished_at = Some(chrono::Utc::now());
                         app.screen = AppScreen::Results;
@@ -543,6 +675,64 @@ fn start_sqlmap_task(targets: Vec<String>) -> mpsc::Receiver<AppEvent> {
             }
         }
         let _ = tx.send(AppEvent::SqlmapDone).await;
+    });
+
+    rx
+}
+
+/// Smart chain: run httpx on subdomains discovered by Subfinder
+fn start_httpx_chain_task(subdomains: Vec<String>) -> mpsc::Receiver<AppEvent> {
+    let (tx, rx) = mpsc::channel(32);
+
+    tokio::spawn(async move {
+        match scanners::httpx::run_list(&subdomains).await {
+            Ok(result) => {
+                let _ = tx.send(AppEvent::HttpxChainResult(result)).await;
+            }
+            Err(e) => {
+                let result = scanners::ScanResult {
+                    scanner: scanners::ScannerType::Httpx,
+                    target: format!("{} subdomains", subdomains.len()),
+                    started_at: chrono::Utc::now(),
+                    finished_at: chrono::Utc::now(),
+                    raw_output: String::new(),
+                    findings: Vec::new(),
+                    success: false,
+                    error: Some(e.to_string()),
+                };
+                let _ = tx.send(AppEvent::HttpxChainResult(result)).await;
+            }
+        }
+        let _ = tx.send(AppEvent::HttpxChainDone).await;
+    });
+
+    rx
+}
+
+/// Smart chain: auto-run WPScan when WordPress is detected
+fn start_wpscan_chain_task(target: String) -> mpsc::Receiver<AppEvent> {
+    let (tx, rx) = mpsc::channel(32);
+
+    tokio::spawn(async move {
+        match scanners::wpscan::run(&target).await {
+            Ok(result) => {
+                let _ = tx.send(AppEvent::WpscanChainResult(result)).await;
+            }
+            Err(e) => {
+                let result = scanners::ScanResult {
+                    scanner: scanners::ScannerType::Wpscan,
+                    target,
+                    started_at: chrono::Utc::now(),
+                    finished_at: chrono::Utc::now(),
+                    raw_output: String::new(),
+                    findings: Vec::new(),
+                    success: false,
+                    error: Some(e.to_string()),
+                };
+                let _ = tx.send(AppEvent::WpscanChainResult(result)).await;
+            }
+        }
+        let _ = tx.send(AppEvent::WpscanChainDone).await;
     });
 
     rx

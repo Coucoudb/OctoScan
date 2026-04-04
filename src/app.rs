@@ -132,15 +132,15 @@ impl App {
     pub fn all_scanner_types() -> Vec<ScannerType> {
         vec![
             // Reconnaissance
-            ScannerType::Nmap,
             ScannerType::Feroxbuster,
-            ScannerType::Subfinder,
             ScannerType::Httpx,
+            ScannerType::Nmap,
+            ScannerType::Subfinder,
             // Vulnerability Scanning
             ScannerType::Nuclei,
             // Web Application
-            ScannerType::Zap,
             ScannerType::Wpscan,
+            ScannerType::Zap,
             // Exploitation
             ScannerType::Sqlmap,
         ]
