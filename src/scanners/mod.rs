@@ -1,7 +1,9 @@
 pub mod feroxbuster;
+pub mod httpx;
 pub mod nmap;
 pub mod nuclei;
 pub mod sqlmap;
+pub mod subfinder;
 pub mod zap;
 
 use anyhow::Result;
@@ -16,6 +18,8 @@ pub enum ScannerType {
     Zap,
     Feroxbuster,
     Sqlmap,
+    Subfinder,
+    Httpx,
 }
 
 impl std::fmt::Display for ScannerType {
@@ -26,6 +30,8 @@ impl std::fmt::Display for ScannerType {
             ScannerType::Zap => write!(f, "ZAP"),
             ScannerType::Feroxbuster => write!(f, "Feroxbuster"),
             ScannerType::Sqlmap => write!(f, "SQLMap"),
+            ScannerType::Subfinder => write!(f, "Subfinder"),
+            ScannerType::Httpx => write!(f, "httpx"),
         }
     }
 }
@@ -40,6 +46,8 @@ impl FromStr for ScannerType {
             "zap" => Ok(ScannerType::Zap),
             "feroxbuster" => Ok(ScannerType::Feroxbuster),
             "sqlmap" => Ok(ScannerType::Sqlmap),
+            "subfinder" => Ok(ScannerType::Subfinder),
+            "httpx" => Ok(ScannerType::Httpx),
             _ => Err(format!("Unknown scanner: {}", s)),
         }
     }
@@ -93,6 +101,8 @@ pub async fn run_scanner(scanner_type: &ScannerType, target: &str) -> Result<Sca
         ScannerType::Zap => zap::run(target).await,
         ScannerType::Feroxbuster => feroxbuster::run(target).await,
         ScannerType::Sqlmap => sqlmap::run(target).await,
+        ScannerType::Subfinder => subfinder::run(target).await,
+        ScannerType::Httpx => httpx::run(target).await,
     }
 }
 

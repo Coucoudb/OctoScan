@@ -151,6 +151,8 @@ fn get_cmd_name(scanner: &ScannerType) -> &'static str {
         }
         ScannerType::Feroxbuster => "feroxbuster",
         ScannerType::Sqlmap => "sqlmap",
+        ScannerType::Subfinder => "subfinder",
+        ScannerType::Httpx => "httpx",
     }
 }
 
@@ -199,6 +201,24 @@ fn get_install_hint(scanner: &ScannerType) -> String {
                 "brew install sqlmap".to_string()
             } else {
                 "sudo apt install sqlmap  (or)  pip install sqlmap".to_string()
+            }
+        }
+        ScannerType::Subfinder => {
+            if cfg!(target_os = "windows") {
+                "Download from https://github.com/projectdiscovery/subfinder/releases".to_string()
+            } else if cfg!(target_os = "macos") {
+                "brew install subfinder".to_string()
+            } else {
+                "sudo apt install subfinder  (or)  go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest".to_string()
+            }
+        }
+        ScannerType::Httpx => {
+            if cfg!(target_os = "windows") {
+                "Download from https://github.com/projectdiscovery/httpx/releases".to_string()
+            } else if cfg!(target_os = "macos") {
+                "brew install httpx".to_string()
+            } else {
+                "sudo apt install httpx  (or)  go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest".to_string()
             }
         }
     }
@@ -273,6 +293,30 @@ fn get_install_method(scanner: &ScannerType) -> Option<InstallMethod> {
             } else {
                 Some(InstallMethod::ShellCmd(
                     "sudo apt-get install -y sqlmap || pip install sqlmap".to_string(),
+                ))
+            }
+        }
+        ScannerType::Subfinder => {
+            if cfg!(target_os = "windows") {
+                Some(InstallMethod::PsScript(subfinder_ps_script()))
+            } else if cfg!(target_os = "macos") {
+                Some(InstallMethod::ShellCmd(
+                    "brew install subfinder".to_string(),
+                ))
+            } else {
+                Some(InstallMethod::ShellCmd(
+                    "sudo apt-get install -y subfinder || go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest".to_string(),
+                ))
+            }
+        }
+        ScannerType::Httpx => {
+            if cfg!(target_os = "windows") {
+                Some(InstallMethod::PsScript(httpx_ps_script()))
+            } else if cfg!(target_os = "macos") {
+                Some(InstallMethod::ShellCmd("brew install httpx".to_string()))
+            } else {
+                Some(InstallMethod::ShellCmd(
+                    "sudo apt-get install -y httpx || go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest".to_string(),
                 ))
             }
         }
@@ -531,6 +575,68 @@ fn feroxbuster_ps_script() -> String {
     .join("\r\n")
 }
 
+fn subfinder_ps_script() -> String {
+    [
+        "$ErrorActionPreference = 'Stop'",
+        "$installDir = Join-Path $env:LOCALAPPDATA 'subfinder'",
+        "$zipPath   = Join-Path $env:TEMP 'subfinder.zip'",
+        "",
+        "if (-not (Test-Path $installDir)) {",
+        "    New-Item -ItemType Directory -Path $installDir -Force > $null",
+        "}",
+        "",
+        "$release = Invoke-RestMethod -Uri 'https://api.github.com/repos/projectdiscovery/subfinder/releases/latest'",
+        "$asset   = $release.assets | Where-Object { $_.name -match 'subfinder_.*_windows_amd64\\.zip$' } | Select-Object -First 1",
+        "if (-not $asset) { Write-Error 'Could not find subfinder Windows release'; exit 1 }",
+        "",
+        "Write-Host \"Downloading $($asset.browser_download_url)...\"",
+        "Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath -UseBasicParsing",
+        "",
+        "Expand-Archive -Path $zipPath -DestinationPath $installDir -Force",
+        "Remove-Item $zipPath -Force",
+        "",
+        "$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')",
+        "if ($userPath -notlike \"*$installDir*\") {",
+        "    [Environment]::SetEnvironmentVariable('Path', \"$userPath;$installDir\", 'User')",
+        "    Write-Host \"Added $installDir to user PATH\"",
+        "}",
+        "",
+        "Write-Host \"subfinder installed to $installDir\"",
+    ]
+    .join("\r\n")
+}
+
+fn httpx_ps_script() -> String {
+    [
+        "$ErrorActionPreference = 'Stop'",
+        "$installDir = Join-Path $env:LOCALAPPDATA 'httpx'",
+        "$zipPath   = Join-Path $env:TEMP 'httpx.zip'",
+        "",
+        "if (-not (Test-Path $installDir)) {",
+        "    New-Item -ItemType Directory -Path $installDir -Force > $null",
+        "}",
+        "",
+        "$release = Invoke-RestMethod -Uri 'https://api.github.com/repos/projectdiscovery/httpx/releases/latest'",
+        "$asset   = $release.assets | Where-Object { $_.name -match 'httpx_.*_windows_amd64\\.zip$' } | Select-Object -First 1",
+        "if (-not $asset) { Write-Error 'Could not find httpx Windows release'; exit 1 }",
+        "",
+        "Write-Host \"Downloading $($asset.browser_download_url)...\"",
+        "Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath -UseBasicParsing",
+        "",
+        "Expand-Archive -Path $zipPath -DestinationPath $installDir -Force",
+        "Remove-Item $zipPath -Force",
+        "",
+        "$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')",
+        "if ($userPath -notlike \"*$installDir*\") {",
+        "    [Environment]::SetEnvironmentVariable('Path', \"$userPath;$installDir\", 'User')",
+        "    Write-Host \"Added $installDir to user PATH\"",
+        "}",
+        "",
+        "Write-Host \"httpx installed to $installDir\"",
+    ]
+    .join("\r\n")
+}
+
 // ---------------------------------------------------------------------------
 // Install execution
 // ---------------------------------------------------------------------------
@@ -555,7 +661,8 @@ pub async fn install_tool(scanner: &ScannerType) -> Result<InstallProgress> {
                 .suffix(".ps1")
                 .tempfile()
                 .context("Failed to create secure temp file for PS script")?;
-            let script_path = script_file.path().to_path_buf();
+            // Close the file handle before writing so PowerShell can read it on Windows
+            let script_path = script_file.into_temp_path().to_path_buf();
             info!("Writing PS script to {}", script_path.display());
             std::fs::write(&script_path, &script)
                 .context(format!("Failed to write {}", script_path.display()))?;

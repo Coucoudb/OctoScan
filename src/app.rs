@@ -37,7 +37,7 @@ pub struct App {
     pub target_input: String,
     pub selected_scanners: Vec<ScannerType>,
     pub scanner_cursor: usize,
-    pub scanner_toggles: [bool; 5],
+    pub scanner_toggles: [bool; 7],
     pub scan_status: ScanStatus,
     pub results: Vec<ScanResult>,
     pub current_scanner_index: usize,
@@ -71,7 +71,7 @@ impl App {
             target_input: target,
             selected_scanners: scanners,
             scanner_cursor: 0,
-            scanner_toggles: [false; 5],
+            scanner_toggles: [false; 7],
             scan_status: ScanStatus::Idle,
             results: Vec::new(),
             current_scanner_index: 0,
@@ -102,7 +102,7 @@ impl App {
             target_input: String::new(),
             selected_scanners: Vec::new(),
             scanner_cursor: 0,
-            scanner_toggles: [false; 5],
+            scanner_toggles: [false; 7],
             scan_status: ScanStatus::Idle,
             results: Vec::new(),
             current_scanner_index: 0,
@@ -134,6 +134,8 @@ impl App {
             // Reconnaissance
             ScannerType::Nmap,
             ScannerType::Feroxbuster,
+            ScannerType::Subfinder,
+            ScannerType::Httpx,
             // Vulnerability Scanning
             ScannerType::Nuclei,
             // Web Application

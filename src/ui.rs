@@ -241,19 +241,21 @@ fn draw_scanner_select(f: &mut Frame, area: Rect, app: &App) {
             "Nmap — Port scanning & service detection",
         ),
         (None, 1, "Feroxbuster — Directory & content discovery"),
+        (None, 2, "Subfinder — Subdomain enumeration"),
+        (None, 3, "httpx — HTTP probing & technology detection"),
         (
             Some("Vulnerability Scanning"),
-            2,
+            4,
             "Nuclei — Vulnerability scanning with templates",
         ),
         (
             Some("Web Application"),
-            3,
+            5,
             "ZAP — Web application security scanner",
         ),
         (
             Some("Exploitation"),
-            4,
+            6,
             "SQLMap — SQL injection verification (runs after ZAP/Nuclei)",
         ),
     ];
