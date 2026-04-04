@@ -1,4 +1,9 @@
-# 🐙 OctoScan
+  ██████╗  ██████╗████████╗ ██████╗ ███████╗ ██████╗ █████╗ ███╗   ██╗
+ ██╔═══██╗██╔════╝╚══██╔══╝██╔═══██╗██╔════╝██╔════╝██╔══██╗████╗  ██║
+ ██║   ██║██║        ██║   ██║   ██║███████╗██║     ███████║██╔██╗ ██║
+ ██║   ██║██║        ██║   ██║   ██║╚════██║██║     ██╔══██║██║╚██╗██║
+ ╚██████╔╝╚██████╗   ██║   ╚██████╔╝███████║╚██████╗██║  ██║██║ ╚████║
+  ╚═════╝  ╚═════╝   ╚═╝    ╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 
 OctoScan is a CLI wrapper that orchestrates popular security tools (Nmap, Nuclei, ZAP, ...) for fast and automated web reconnaissance and auditing. It features an interactive terminal UI for navigating scans and results.
 
