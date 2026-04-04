@@ -150,6 +150,7 @@ fn get_cmd_name(scanner: &ScannerType) -> &'static str {
                 "zaproxy"
             }
         }
+        ScannerType::Feroxbuster => "feroxbuster",
     }
 }
 
@@ -180,6 +181,15 @@ fn get_install_hint(scanner: &ScannerType) -> String {
                 "brew install --cask zap".to_string()
             } else {
                 "sudo apt install zaproxy".to_string()
+            }
+        }
+        ScannerType::Feroxbuster => {
+            if cfg!(target_os = "windows") {
+                "Download from https://github.com/epi052/feroxbuster/releases".to_string()
+            } else if cfg!(target_os = "macos") {
+                "brew install feroxbuster".to_string()
+            } else {
+                "sudo apt install feroxbuster  (or)  cargo install feroxbuster".to_string()
             }
         }
     }
@@ -230,6 +240,19 @@ fn get_install_method(scanner: &ScannerType) -> Option<InstallMethod> {
             } else {
                 Some(InstallMethod::ShellCmd(
                     "sudo apt-get install -y zaproxy".to_string(),
+                ))
+            }
+        }
+        ScannerType::Feroxbuster => {
+            if cfg!(target_os = "windows") {
+                Some(InstallMethod::PsScript(feroxbuster_ps_script()))
+            } else if cfg!(target_os = "macos") {
+                Some(InstallMethod::ShellCmd(
+                    "brew install feroxbuster".to_string(),
+                ))
+            } else {
+                Some(InstallMethod::ShellCmd(
+                    "sudo apt-get install -y feroxbuster || cargo install feroxbuster".to_string(),
                 ))
             }
         }
@@ -453,6 +476,37 @@ fn nuclei_ps_script() -> String {
         "}",
         "",
         "Write-Host \"nuclei installed to $installDir\"",
+    ]
+    .join("\r\n")
+}
+
+fn feroxbuster_ps_script() -> String {
+    [
+        "$ErrorActionPreference = 'Stop'",
+        "$installDir = Join-Path $env:LOCALAPPDATA 'feroxbuster'",
+        "$zipPath   = Join-Path $env:TEMP 'feroxbuster.zip'",
+        "",
+        "if (-not (Test-Path $installDir)) {",
+        "    New-Item -ItemType Directory -Path $installDir -Force > $null",
+        "}",
+        "",
+        "$release = Invoke-RestMethod -Uri 'https://api.github.com/repos/epi052/feroxbuster/releases/latest'",
+        "$asset   = $release.assets | Where-Object { $_.name -match '^x86_64-windows-feroxbuster' -and $_.name -notmatch 'debug' } | Select-Object -First 1",
+        "if (-not $asset) { Write-Error 'Could not find feroxbuster Windows release'; exit 1 }",
+        "",
+        "Write-Host \"Downloading $($asset.browser_download_url)...\"",
+        "Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath -UseBasicParsing",
+        "",
+        "Expand-Archive -Path $zipPath -DestinationPath $installDir -Force",
+        "Remove-Item $zipPath -Force",
+        "",
+        "$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')",
+        "if ($userPath -notlike \"*$installDir*\") {",
+        "    [Environment]::SetEnvironmentVariable('Path', \"$userPath;$installDir\", 'User')",
+        "    Write-Host \"Added $installDir to user PATH\"",
+        "}",
+        "",
+        "Write-Host \"feroxbuster installed to $installDir\"",
     ]
     .join("\r\n")
 }
