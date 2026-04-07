@@ -255,11 +255,7 @@ fn parse_hydra_output(output: &str, host: &str, port: u16, service: &str) -> Vec
 fn extract_field(line: &str, field: &str) -> String {
     if let Some(pos) = line.find(field) {
         let after = &line[pos + field.len()..];
-        after
-            .split_whitespace()
-            .next()
-            .unwrap_or("")
-            .to_string()
+        after.split_whitespace().next().unwrap_or("").to_string()
     } else {
         String::new()
     }
