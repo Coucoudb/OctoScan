@@ -31,7 +31,20 @@ pub async fn run(target: &str) -> Result<ScanResult> {
         .unwrap_or(target);
 
     let output = Command::new("nmap")
-        .args(["-sV", "-sC", "--top-ports", "1000", "-T4", host])
+        .args([
+            "-sV", // service/version detection
+            "-sC", // default NSE scripts
+            "--script",
+            "vuln", // vulnerability detection scripts
+            "--top-ports",
+            "1000",
+            "-T4",    // aggressive timing
+            "--open", // only show open ports
+            "-Pn",    // skip host discovery (ICMP often blocked)
+            "--min-rate",
+            "1000",
+            host,
+        ])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()

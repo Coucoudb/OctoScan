@@ -1,6 +1,6 @@
 [package]
 name = "octoscan"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "CLI security auditing tool orchestrating Nmap, Nuclei, ZAP and more"
 license = "MIT"

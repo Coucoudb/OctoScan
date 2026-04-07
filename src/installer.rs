@@ -150,6 +150,17 @@ fn get_cmd_name(scanner: &ScannerType) -> &'static str {
             }
         }
         ScannerType::Feroxbuster => "feroxbuster",
+        ScannerType::Sqlmap => "sqlmap",
+        ScannerType::Subfinder => "subfinder",
+        ScannerType::Httpx => "httpx",
+        ScannerType::Wpscan => {
+            if cfg!(target_os = "windows") {
+                "wpscan.bat"
+            } else {
+                "wpscan"
+            }
+        }
+        ScannerType::Hydra => "hydra",
     }
 }
 
@@ -189,6 +200,51 @@ fn get_install_hint(scanner: &ScannerType) -> String {
                 "brew install feroxbuster".to_string()
             } else {
                 "sudo apt install feroxbuster  (or)  cargo install feroxbuster".to_string()
+            }
+        }
+        ScannerType::Sqlmap => {
+            if cfg!(target_os = "windows") {
+                "pip install sqlmap  (or)  https://sqlmap.org".to_string()
+            } else if cfg!(target_os = "macos") {
+                "brew install sqlmap".to_string()
+            } else {
+                "sudo apt install sqlmap  (or)  pip install sqlmap".to_string()
+            }
+        }
+        ScannerType::Subfinder => {
+            if cfg!(target_os = "windows") {
+                "Download from https://github.com/projectdiscovery/subfinder/releases".to_string()
+            } else if cfg!(target_os = "macos") {
+                "brew install subfinder".to_string()
+            } else {
+                "sudo apt install subfinder  (or)  go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest".to_string()
+            }
+        }
+        ScannerType::Httpx => {
+            if cfg!(target_os = "windows") {
+                "Download from https://github.com/projectdiscovery/httpx/releases".to_string()
+            } else if cfg!(target_os = "macos") {
+                "brew install httpx".to_string()
+            } else {
+                "sudo apt install httpx  (or)  go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest".to_string()
+            }
+        }
+        ScannerType::Wpscan => {
+            if cfg!(target_os = "windows") {
+                "gem install wpscan  (requires Ruby)".to_string()
+            } else if cfg!(target_os = "macos") {
+                "brew install wpscan".to_string()
+            } else {
+                "sudo apt install wpscan  (or)  gem install wpscan".to_string()
+            }
+        }
+        ScannerType::Hydra => {
+            if cfg!(target_os = "windows") {
+                "Download from https://github.com/maaaaz/thc-hydra-windows/releases".to_string()
+            } else if cfg!(target_os = "macos") {
+                "brew install hydra".to_string()
+            } else {
+                "sudo apt install hydra  (or)  sudo dnf install hydra".to_string()
             }
         }
     }
@@ -252,6 +308,63 @@ fn get_install_method(scanner: &ScannerType) -> Option<InstallMethod> {
             } else {
                 Some(InstallMethod::ShellCmd(
                     "sudo apt-get install -y feroxbuster || cargo install feroxbuster".to_string(),
+                ))
+            }
+        }
+        ScannerType::Sqlmap => {
+            if cfg!(target_os = "windows") {
+                Some(InstallMethod::PsScript(sqlmap_ps_script()))
+            } else if cfg!(target_os = "macos") {
+                Some(InstallMethod::ShellCmd("brew install sqlmap".to_string()))
+            } else {
+                Some(InstallMethod::ShellCmd(
+                    "sudo apt-get install -y sqlmap || pip install sqlmap".to_string(),
+                ))
+            }
+        }
+        ScannerType::Subfinder => {
+            if cfg!(target_os = "windows") {
+                Some(InstallMethod::PsScript(subfinder_ps_script()))
+            } else if cfg!(target_os = "macos") {
+                Some(InstallMethod::ShellCmd(
+                    "brew install subfinder".to_string(),
+                ))
+            } else {
+                Some(InstallMethod::ShellCmd(
+                    "sudo apt-get install -y subfinder || go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest".to_string(),
+                ))
+            }
+        }
+        ScannerType::Httpx => {
+            if cfg!(target_os = "windows") {
+                Some(InstallMethod::PsScript(httpx_ps_script()))
+            } else if cfg!(target_os = "macos") {
+                Some(InstallMethod::ShellCmd("brew install httpx".to_string()))
+            } else {
+                Some(InstallMethod::ShellCmd(
+                    "sudo apt-get install -y httpx || go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest".to_string(),
+                ))
+            }
+        }
+        ScannerType::Wpscan => {
+            if cfg!(target_os = "windows") {
+                Some(InstallMethod::PsScript(wpscan_ps_script()))
+            } else if cfg!(target_os = "macos") {
+                Some(InstallMethod::ShellCmd("brew install wpscan".to_string()))
+            } else {
+                Some(InstallMethod::ShellCmd(
+                    "sudo apt-get install -y wpscan || gem install wpscan".to_string(),
+                ))
+            }
+        }
+        ScannerType::Hydra => {
+            if cfg!(target_os = "windows") {
+                Some(InstallMethod::PsScript(hydra_ps_script()))
+            } else if cfg!(target_os = "macos") {
+                Some(InstallMethod::ShellCmd("brew install hydra".to_string()))
+            } else {
+                Some(InstallMethod::ShellCmd(
+                    "sudo apt-get install -y hydra || sudo dnf install -y hydra".to_string(),
                 ))
             }
         }
@@ -499,6 +612,18 @@ fn feroxbuster_ps_script() -> String {
         "Expand-Archive -Path $zipPath -DestinationPath $installDir -Force",
         "Remove-Item $zipPath -Force",
         "",
+        "# Download default wordlist from SecLists",
+        "$wordlistDir = Join-Path $installDir 'wordlists'",
+        "$wordlistFile = Join-Path $wordlistDir 'raft-medium-directories.txt'",
+        "if (-not (Test-Path $wordlistDir)) {",
+        "    New-Item -ItemType Directory -Path $wordlistDir -Force > $null",
+        "}",
+        "if (-not (Test-Path $wordlistFile)) {",
+        "    Write-Host 'Downloading default wordlist (raft-medium-directories.txt)...'",
+        "    Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/Web-Content/raft-medium-directories.txt' -OutFile $wordlistFile -UseBasicParsing",
+        "    Write-Host 'Wordlist downloaded.'",
+        "}",
+        "",
         "$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')",
         "if ($userPath -notlike \"*$installDir*\") {",
         "    [Environment]::SetEnvironmentVariable('Path', \"$userPath;$installDir\", 'User')",
@@ -506,6 +631,272 @@ fn feroxbuster_ps_script() -> String {
         "}",
         "",
         "Write-Host \"feroxbuster installed to $installDir\"",
+    ]
+    .join("\r\n")
+}
+
+fn sqlmap_ps_script() -> String {
+    [
+        "$ErrorActionPreference = 'Stop'",
+        "",
+        "# Install sqlmap via pip",
+        "pip install sqlmap",
+        "",
+        "# Find the Python user Scripts directory and add to PATH",
+        "$pyUserBase = & python -m site --user-site 2>$null",
+        "if ($pyUserBase) {",
+        "    $scriptsDir = Join-Path (Split-Path $pyUserBase) 'Scripts'",
+        "} else {",
+        "    # Fallback: common locations",
+        "    $scriptsDir = Get-ChildItem -Path \"$env:APPDATA\\Python\" -Filter 'sqlmap*' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1",
+        "    if ($scriptsDir) { $scriptsDir = $scriptsDir.DirectoryName }",
+        "}",
+        "",
+        "if ($scriptsDir -and (Test-Path $scriptsDir)) {",
+        "    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')",
+        "    if ($userPath -notlike \"*$scriptsDir*\") {",
+        "        [Environment]::SetEnvironmentVariable('Path', \"$userPath;$scriptsDir\", 'User')",
+        "        Write-Host \"Added $scriptsDir to user PATH\"",
+        "    } else {",
+        "        Write-Host \"$scriptsDir already in PATH\"",
+        "    }",
+        "    Write-Host \"sqlmap installed (scripts at $scriptsDir)\"",
+        "} else {",
+        "    Write-Host 'sqlmap installed but Scripts directory not found — you may need to add it to PATH manually'",
+        "}",
+    ]
+    .join("\r\n")
+}
+
+fn subfinder_ps_script() -> String {
+    [
+        "$ErrorActionPreference = 'Stop'",
+        "$installDir = Join-Path $env:LOCALAPPDATA 'subfinder'",
+        "$zipPath   = Join-Path $env:TEMP 'subfinder.zip'",
+        "",
+        "if (-not (Test-Path $installDir)) {",
+        "    New-Item -ItemType Directory -Path $installDir -Force > $null",
+        "}",
+        "",
+        "$release = Invoke-RestMethod -Uri 'https://api.github.com/repos/projectdiscovery/subfinder/releases/latest'",
+        "$asset   = $release.assets | Where-Object { $_.name -match 'subfinder_.*_windows_amd64\\.zip$' } | Select-Object -First 1",
+        "if (-not $asset) { Write-Error 'Could not find subfinder Windows release'; exit 1 }",
+        "",
+        "Write-Host \"Downloading $($asset.browser_download_url)...\"",
+        "Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath -UseBasicParsing",
+        "",
+        "Expand-Archive -Path $zipPath -DestinationPath $installDir -Force",
+        "Remove-Item $zipPath -Force",
+        "",
+        "$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')",
+        "if ($userPath -notlike \"*$installDir*\") {",
+        "    [Environment]::SetEnvironmentVariable('Path', \"$userPath;$installDir\", 'User')",
+        "    Write-Host \"Added $installDir to user PATH\"",
+        "}",
+        "",
+        "Write-Host \"subfinder installed to $installDir\"",
+    ]
+    .join("\r\n")
+}
+
+fn httpx_ps_script() -> String {
+    [
+        "$ErrorActionPreference = 'Stop'",
+        "$installDir = Join-Path $env:LOCALAPPDATA 'httpx'",
+        "$zipPath   = Join-Path $env:TEMP 'httpx.zip'",
+        "",
+        "if (-not (Test-Path $installDir)) {",
+        "    New-Item -ItemType Directory -Path $installDir -Force > $null",
+        "}",
+        "",
+        "$release = Invoke-RestMethod -Uri 'https://api.github.com/repos/projectdiscovery/httpx/releases/latest'",
+        "$asset   = $release.assets | Where-Object { $_.name -match 'httpx_.*_windows_amd64\\.zip$' } | Select-Object -First 1",
+        "if (-not $asset) { Write-Error 'Could not find httpx Windows release'; exit 1 }",
+        "",
+        "Write-Host \"Downloading $($asset.browser_download_url)...\"",
+        "Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath -UseBasicParsing",
+        "",
+        "Expand-Archive -Path $zipPath -DestinationPath $installDir -Force",
+        "Remove-Item $zipPath -Force",
+        "",
+        "$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')",
+        "if ($userPath -notlike \"*$installDir*\") {",
+        "    [Environment]::SetEnvironmentVariable('Path', \"$userPath;$installDir\", 'User')",
+        "    Write-Host \"Added $installDir to user PATH\"",
+        "}",
+        "",
+        "Write-Host \"httpx installed to $installDir\"",
+    ]
+    .join("\r\n")
+}
+
+fn wpscan_ps_script() -> String {
+    [
+        "# NOTE: Do NOT use $ErrorActionPreference = 'Stop' here.",
+        "# ridk and pacman write status info to stderr which would abort the script.",
+        "",
+        "# Check if Ruby+DevKit is installed (ridk is the indicator for DevKit)",
+        "$rubyCheck = Get-Command ruby -ErrorAction SilentlyContinue",
+        "$ridkCheck = Get-Command ridk -ErrorAction SilentlyContinue",
+        "",
+        "if (-not $rubyCheck -or -not $ridkCheck) {",
+        "    if ($rubyCheck -and -not $ridkCheck) {",
+        "        Write-Host 'Ruby found but DevKit (ridk) is missing. Removing plain Ruby...'",
+        "        winget uninstall RubyInstallerTeam.Ruby.3.2 --accept-source-agreements --silent 2>$null",
+        "        winget uninstall RubyInstallerTeam.Ruby.3.3 --accept-source-agreements --silent 2>$null",
+        "    }",
+        "    Write-Host 'Installing Ruby+DevKit via winget (includes MSYS2)...'",
+        "    winget install --accept-package-agreements --accept-source-agreements RubyInstallerTeam.RubyWithDevKit.3.2",
+        "    if ($LASTEXITCODE -ne 0) { Write-Error 'winget install failed'; exit 1 }",
+        "    # Refresh PATH",
+        "    $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')",
+        "    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')",
+        "    $env:Path = \"$machinePath;$userPath\"",
+        "    $rubyCheck = Get-Command ruby -ErrorAction SilentlyContinue",
+        "    if (-not $rubyCheck) { Write-Error 'Ruby+DevKit installation failed'; exit 1 }",
+        "    Write-Host 'Ruby+DevKit installed successfully'",
+        "} else {",
+        "    Write-Host 'Ruby+DevKit already installed'",
+        "}",
+        "",
+        "# Run ridk install to set up MSYS2 toolchain (stderr output is normal, ignore errors)",
+        "$ridkCheck = Get-Command ridk -ErrorAction SilentlyContinue",
+        "if ($ridkCheck) {",
+        "    Write-Host 'Setting up MSYS2 toolchain (this may take a few minutes)...'",
+        "    $ridkOutput = & ridk install 3 2>&1 | Out-String",
+        "    Write-Host $ridkOutput",
+        "    Write-Host 'MSYS2 toolchain setup complete'",
+        "}",
+        "",
+        "# Install libcurl via MSYS2 (required by ethon/typhoeus gems)",
+        "Write-Host 'Installing libcurl via MSYS2...'",
+        "$pacmanOutput = & ridk exec pacman -S mingw-w64-ucrt-x86_64-curl --noconfirm 2>&1 | Out-String",
+        "Write-Host $pacmanOutput",
+        "",
+        "# Add MSYS2 ucrt64/bin to user PATH so libcurl.dll is always found",
+        "$rubyDir = Split-Path (Get-Command ruby).Source",
+        "$msys2Bin = Join-Path (Split-Path $rubyDir) 'msys64\\ucrt64\\bin'",
+        "if (Test-Path $msys2Bin) {",
+        "    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')",
+        "    if ($userPath -notlike \"*$msys2Bin*\") {",
+        "        [Environment]::SetEnvironmentVariable('Path', \"$userPath;$msys2Bin\", 'User')",
+        "        Write-Host \"Added $msys2Bin to user PATH\"",
+        "    }",
+        "    $env:Path = \"$env:Path;$msys2Bin\"",
+        "    # Create libcurl.dll alias — MSYS2 ships libcurl-4.dll but ethon/FFI loads 'curl' (libcurl.dll)",
+        "    $src = Join-Path $msys2Bin 'libcurl-4.dll'",
+        "    $dst = Join-Path $msys2Bin 'libcurl.dll'",
+        "    if ((Test-Path $src) -and -not (Test-Path $dst)) {",
+        "        Copy-Item $src $dst",
+        "        Write-Host 'Created libcurl.dll copy from libcurl-4.dll'",
+        "    }",
+        "    # Also set ETHON_CURL_LIB persistently so ethon always finds libcurl",
+        "    $curlDll = Join-Path $msys2Bin 'libcurl-4.dll'",
+        "    if (Test-Path $curlDll) {",
+        "        [Environment]::SetEnvironmentVariable('ETHON_CURL_LIB', $curlDll, 'User')",
+        "        $env:ETHON_CURL_LIB = $curlDll",
+        "        Write-Host \"Set ETHON_CURL_LIB=$curlDll\"",
+        "    }",
+        "} else {",
+        "    Write-Host 'WARNING: MSYS2 ucrt64/bin not found — libcurl may not be available'",
+        "}",
+        "",
+        "# Install wpscan gem",
+        "Write-Host 'Installing WPScan via gem (this may take a few minutes)...'",
+        "$gemOutput = & gem install wpscan --no-document 2>&1 | Out-String",
+        "Write-Host $gemOutput",
+        "",
+        "# Ensure gem bin directory is in PATH",
+        "$gemBin = & ruby -e \"puts Gem.bindir\" 2>$null",
+        "if ($gemBin -and (Test-Path $gemBin)) {",
+        "    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')",
+        "    if ($userPath -notlike \"*$gemBin*\") {",
+        "        [Environment]::SetEnvironmentVariable('Path', \"$userPath;$gemBin\", 'User')",
+        "        Write-Host \"Added $gemBin to user PATH\"",
+        "    }",
+        "    $env:Path = \"$env:Path;$gemBin\"",
+        "}",
+        "",
+        "# Final check",
+        "$finalCheck = Get-Command wpscan -ErrorAction SilentlyContinue",
+        "if ($finalCheck) {",
+        "    Write-Host \"WPScan installed at $($finalCheck.Source)\"",
+        "} else {",
+        "    Write-Error 'WPScan installation failed — wpscan not found in PATH'",
+        "    exit 1",
+        "}",
+    ]
+    .join("\r\n")
+}
+
+fn hydra_ps_script() -> String {
+    [
+        "$ErrorActionPreference = 'Stop'",
+        "",
+        "# Download THC-Hydra Windows build from GitHub",
+        "$installDir = Join-Path $env:LOCALAPPDATA 'hydra'",
+        "New-Item -ItemType Directory -Path $installDir -Force | Out-Null",
+        "",
+        "# Download latest release zip",
+        "$releasePage = 'https://api.github.com/repos/maaaaz/thc-hydra-windows/releases/latest'",
+        "try {",
+        "    $release = Invoke-RestMethod -Uri $releasePage -UseBasicParsing",
+        "    $asset = $release.assets | Where-Object { $_.name -match '\\.zip$' } | Select-Object -First 1",
+        "    if (-not $asset) { throw 'No zip asset found' }",
+        "    $zipUrl = $asset.browser_download_url",
+        "} catch {",
+        "    # Fallback: direct known URL",
+        "    $zipUrl = 'https://github.com/maaaaz/thc-hydra-windows/releases/download/v9.5/thc-hydra-9.5-win64.zip'",
+        "}",
+        "",
+        "$zipPath = Join-Path $env:TEMP 'hydra.zip'",
+        "Write-Host \"Downloading Hydra from $zipUrl...\"",
+        "Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing",
+        "",
+        "Write-Host 'Extracting...'",
+        "Expand-Archive -Path $zipPath -DestinationPath $installDir -Force",
+        "Remove-Item $zipPath -Force",
+        "",
+        "# Find hydra.exe (may be in a subfolder)",
+        "$hydraExe = Get-ChildItem -Path $installDir -Recurse -Filter 'hydra.exe' | Select-Object -First 1",
+        "if (-not $hydraExe) {",
+        "    Write-Error 'hydra.exe not found after extraction'",
+        "    exit 1",
+        "}",
+        "$hydraDir = $hydraExe.DirectoryName",
+        "",
+        "# Add to user PATH",
+        "$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')",
+        "if ($userPath -notlike \"*$hydraDir*\") {",
+        "    [Environment]::SetEnvironmentVariable('Path', \"$userPath;$hydraDir\", 'User')",
+        "    Write-Host \"Added $hydraDir to user PATH\"",
+        "}",
+        "$env:Path = \"$env:Path;$hydraDir\"",
+        "",
+        "# Download small wordlists for brute-force",
+        "$wlDir = Join-Path $installDir 'wordlists'",
+        "New-Item -ItemType Directory -Path $wlDir -Force | Out-Null",
+        "",
+        "$userFile = Join-Path $wlDir 'top-usernames-shortlist.txt'",
+        "if (-not (Test-Path $userFile)) {",
+        "    Write-Host 'Downloading username wordlist...'",
+        "    Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/danielmiessler/SecLists/master/Usernames/top-usernames-shortlist.txt' -OutFile $userFile -UseBasicParsing",
+        "}",
+        "",
+        "$passFile = Join-Path $wlDir 'common-credentials-10.txt'",
+        "if (-not (Test-Path $passFile)) {",
+        "    Write-Host 'Downloading password wordlist...'",
+        "    Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/danielmiessler/SecLists/master/Passwords/Common-Credentials/Pwdb_top-10000.txt' -OutFile $passFile -UseBasicParsing",
+        "}",
+        "",
+        "# Final check",
+        "$finalCheck = Get-Command hydra -ErrorAction SilentlyContinue",
+        "if ($finalCheck) {",
+        "    Write-Host \"Hydra installed at $($finalCheck.Source)\"",
+        "} else {",
+        "    Write-Error 'Hydra installation failed — hydra not found in PATH'",
+        "    exit 1",
+        "}",
     ]
     .join("\r\n")
 }
@@ -534,7 +925,8 @@ pub async fn install_tool(scanner: &ScannerType) -> Result<InstallProgress> {
                 .suffix(".ps1")
                 .tempfile()
                 .context("Failed to create secure temp file for PS script")?;
-            let script_path = script_file.path().to_path_buf();
+            // Close the file handle before writing so PowerShell can read it on Windows
+            let script_path = script_file.into_temp_path().to_path_buf();
             info!("Writing PS script to {}", script_path.display());
             std::fs::write(&script_path, &script)
                 .context(format!("Failed to write {}", script_path.display()))?;
