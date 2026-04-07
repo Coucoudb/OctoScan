@@ -1,9 +1,35 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
+use std::collections::HashSet;
+use std::path::PathBuf;
 use std::process::Stdio;
 use tokio::process::Command;
 
 use super::{check_tool, Finding, ScanResult, ScannerType, Severity};
+
+/// Returns the path to the default wordlist shipped by the installer.
+fn default_wordlist() -> Option<PathBuf> {
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(local) = std::env::var_os("LOCALAPPDATA") {
+            let p = PathBuf::from(local)
+                .join("feroxbuster")
+                .join("wordlists")
+                .join("raft-medium-directories.txt");
+            if p.exists() {
+                return Some(p);
+            }
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let p = PathBuf::from("/usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt");
+        if p.exists() {
+            return Some(p);
+        }
+    }
+    None
+}
 
 pub async fn run(target: &str) -> Result<ScanResult> {
     let started_at = Utc::now();
@@ -22,24 +48,31 @@ pub async fn run(target: &str) -> Result<ScanResult> {
         });
     }
 
+    let mut args = vec![
+        "-u".to_string(),
+        target.to_string(),
+        "--silent".to_string(),
+        "--no-state".to_string(),
+        "--auto-tune".to_string(),
+        "--json".to_string(),
+        "-d".to_string(),
+        "2".to_string(), // recursion depth limit
+        "-t".to_string(),
+        "50".to_string(), // threads
+        "-k".to_string(), // skip TLS cert verification
+        "--filter-status".to_string(),
+        "404".to_string(), // filter out 404s
+        "--timeout".to_string(),
+        "10".to_string(), // request timeout (seconds)
+    ];
+
+    if let Some(wordlist) = default_wordlist() {
+        args.push("-w".to_string());
+        args.push(wordlist.to_string_lossy().to_string());
+    }
+
     let output = Command::new("feroxbuster")
-        .args([
-            "-u",
-            target,
-            "--silent",
-            "--no-state",
-            "--auto-tune",
-            "--json",
-            "-d",
-            "2", // recursion depth limit
-            "-t",
-            "50", // threads
-            "-k", // skip TLS cert verification
-            "--filter-status",
-            "404", // filter out 404s
-            "--timeout",
-            "10", // request timeout (seconds)
-        ])
+        .args(&args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
@@ -77,8 +110,30 @@ pub async fn run(target: &str) -> Result<ScanResult> {
     })
 }
 
+/// File extensions that indicate static assets (not interesting endpoints).
+const STATIC_EXTENSIONS: &[&str] = &[
+    ".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico",
+    ".woff", ".woff2", ".ttf", ".eot", ".map", ".mp4", ".webm",
+    ".mp3", ".wav", ".pdf",
+];
+
+/// Returns true if the URL path points to a static asset.
+fn is_static_asset(url: &str) -> bool {
+    let path = url.split('?').next().unwrap_or(url).to_lowercase();
+    STATIC_EXTENSIONS.iter().any(|ext| path.ends_with(ext))
+}
+
+/// Returns true if the URL contains excessive percent-encoding (garbage/binary).
+fn is_garbage_url(url: &str) -> bool {
+    let encoded_count = url.matches("%EF%BF%BD").count()
+        + url.matches("%00").count()
+        + url.matches("%C9").count();
+    encoded_count >= 3
+}
+
 fn parse_feroxbuster_output(output: &str) -> Vec<Finding> {
     let mut findings = Vec::new();
+    let mut seen_urls: HashSet<String> = HashSet::new();
 
     for line in output.lines() {
         if line.trim().is_empty() {
@@ -86,7 +141,6 @@ fn parse_feroxbuster_output(output: &str) -> Vec<Finding> {
         }
 
         if let Ok(json) = serde_json::from_str::<serde_json::Value>(line) {
-            // feroxbuster JSON lines contain type, url, status, content_length, etc.
             let obj_type = json["type"].as_str().unwrap_or("");
             if obj_type != "response" {
                 continue;
@@ -97,11 +151,31 @@ fn parse_feroxbuster_output(output: &str) -> Vec<Finding> {
             let content_length = json["content_length"].as_u64().unwrap_or(0);
             let method = json["method"].as_str().unwrap_or("GET");
 
+            // Skip error responses (catch-all routes, bad requests)
+            if status >= 400 && status != 401 && status != 403 {
+                continue;
+            }
+
+            // Skip static assets
+            if is_static_asset(&url) {
+                continue;
+            }
+
+            // Skip garbage/binary URLs
+            if is_garbage_url(&url) {
+                continue;
+            }
+
+            // Deduplicate case-insensitively
+            let url_lower = url.to_lowercase();
+            if !seen_urls.insert(url_lower) {
+                continue;
+            }
+
             let severity = match status {
                 200 => Severity::Info,
                 301 | 302 => Severity::Low,
                 401 | 403 => Severity::Medium,
-                500..=599 => Severity::High,
                 _ => Severity::Info,
             };
 
