@@ -30,6 +30,9 @@ enum AppEvent {
     // SQLMap post-scan
     SqlmapResult(scanners::ScanResult),
     SqlmapDone,
+    // Hydra post-scan
+    HydraResult(scanners::ScanResult),
+    HydraDone,
     // Tool check events
     ToolCheckDone(Vec<installer::ToolStatus>),
     // Install events
@@ -212,6 +215,33 @@ async fn run_event_loop(
                                     "No SQL injection detected — SQLMap skipped.".to_string();
                             }
                         }
+
+                        // === Smart Pipeline: Nmap → Hydra chain ===
+                        if app.hydra_selected() {
+                            let hydra_targets =
+                                scanners::extract_hydra_targets(&app.results, &app.target);
+                            if !hydra_targets.is_empty() {
+                                app.update_scanner_status(
+                                    &scanners::ScannerType::Hydra,
+                                    ScannerRunStatus::Running,
+                                );
+                                app.progress_message = format!(
+                                    "Brute-forcing {} service(s) with Hydra...",
+                                    hydra_targets.len()
+                                );
+                                event_rx = Some(start_hydra_task(hydra_targets));
+                                break;
+                            } else {
+                                app.update_scanner_status(
+                                    &scanners::ScannerType::Hydra,
+                                    ScannerRunStatus::Completed,
+                                );
+                                app.progress_message =
+                                    "No brute-forceable services found — Hydra skipped."
+                                        .to_string();
+                            }
+                        }
+
                         app.scan_status = ScanStatus::Completed;
                         app.finished_at = Some(chrono::Utc::now());
                         app.screen = AppScreen::Results;
@@ -263,6 +293,23 @@ async fn run_event_loop(
                             }
                         }
 
+                        if app.hydra_selected() {
+                            let hydra_targets =
+                                scanners::extract_hydra_targets(&app.results, &app.target);
+                            if !hydra_targets.is_empty() {
+                                app.update_scanner_status(
+                                    &scanners::ScannerType::Hydra,
+                                    ScannerRunStatus::Running,
+                                );
+                                app.progress_message = format!(
+                                    "Brute-forcing {} service(s) with Hydra...",
+                                    hydra_targets.len()
+                                );
+                                event_rx = Some(start_hydra_task(hydra_targets));
+                                break;
+                            }
+                        }
+
                         app.scan_status = ScanStatus::Completed;
                         app.finished_at = Some(chrono::Utc::now());
                         app.screen = AppScreen::Results;
@@ -300,6 +347,24 @@ async fn run_event_loop(
                             }
                         }
 
+                        // After WPScan chain, check Hydra chain
+                        if app.hydra_selected() {
+                            let hydra_targets =
+                                scanners::extract_hydra_targets(&app.results, &app.target);
+                            if !hydra_targets.is_empty() {
+                                app.update_scanner_status(
+                                    &scanners::ScannerType::Hydra,
+                                    ScannerRunStatus::Running,
+                                );
+                                app.progress_message = format!(
+                                    "Brute-forcing {} service(s) with Hydra...",
+                                    hydra_targets.len()
+                                );
+                                event_rx = Some(start_hydra_task(hydra_targets));
+                                break;
+                            }
+                        }
+
                         app.scan_status = ScanStatus::Completed;
                         app.finished_at = Some(chrono::Utc::now());
                         app.screen = AppScreen::Results;
@@ -317,6 +382,48 @@ async fn run_event_loop(
                         app.current_scanner_index += 1;
                     }
                     AppEvent::SqlmapDone => {
+                        // After SQLMap, check Hydra chain
+                        if app.hydra_selected() {
+                            let hydra_targets =
+                                scanners::extract_hydra_targets(&app.results, &app.target);
+                            if !hydra_targets.is_empty() {
+                                app.update_scanner_status(
+                                    &scanners::ScannerType::Hydra,
+                                    ScannerRunStatus::Running,
+                                );
+                                app.progress_message = format!(
+                                    "Brute-forcing {} service(s) with Hydra...",
+                                    hydra_targets.len()
+                                );
+                                event_rx = Some(start_hydra_task(hydra_targets));
+                                break;
+                            } else {
+                                app.update_scanner_status(
+                                    &scanners::ScannerType::Hydra,
+                                    ScannerRunStatus::Completed,
+                                );
+                                app.progress_message =
+                                    "No brute-forceable services found — Hydra skipped."
+                                        .to_string();
+                            }
+                        }
+                        app.scan_status = ScanStatus::Completed;
+                        app.finished_at = Some(chrono::Utc::now());
+                        app.screen = AppScreen::Results;
+                        event_rx = None;
+                        break;
+                    }
+                    AppEvent::HydraResult(result) => {
+                        let status = if result.success {
+                            ScannerRunStatus::Completed
+                        } else {
+                            ScannerRunStatus::Failed
+                        };
+                        app.update_scanner_status(&scanners::ScannerType::Hydra, status);
+                        app.results.push(result);
+                        app.current_scanner_index += 1;
+                    }
+                    AppEvent::HydraDone => {
                         app.scan_status = ScanStatus::Completed;
                         app.finished_at = Some(chrono::Utc::now());
                         app.screen = AppScreen::Results;
@@ -652,6 +759,7 @@ fn start_scan_task(
     rx
 }
 
+/// Smart chain: run sqlmap on discovered SQL injection endpoints
 fn start_sqlmap_task(targets: Vec<String>) -> mpsc::Receiver<AppEvent> {
     let (tx, rx) = mpsc::channel(32);
 
@@ -675,6 +783,35 @@ fn start_sqlmap_task(targets: Vec<String>) -> mpsc::Receiver<AppEvent> {
             }
         }
         let _ = tx.send(AppEvent::SqlmapDone).await;
+    });
+
+    rx
+}
+
+/// Smart chain: run Hydra on brute-forceable services discovered by Nmap
+fn start_hydra_task(targets: Vec<scanners::hydra::HydraTarget>) -> mpsc::Receiver<AppEvent> {
+    let (tx, rx) = mpsc::channel(32);
+
+    tokio::spawn(async move {
+        match scanners::hydra::run_on_targets(&targets).await {
+            Ok(result) => {
+                let _ = tx.send(AppEvent::HydraResult(result)).await;
+            }
+            Err(e) => {
+                let result = scanners::ScanResult {
+                    scanner: scanners::ScannerType::Hydra,
+                    target: format!("{} service(s)", targets.len()),
+                    started_at: chrono::Utc::now(),
+                    finished_at: chrono::Utc::now(),
+                    raw_output: String::new(),
+                    findings: Vec::new(),
+                    success: false,
+                    error: Some(e.to_string()),
+                };
+                let _ = tx.send(AppEvent::HydraResult(result)).await;
+            }
+        }
+        let _ = tx.send(AppEvent::HydraDone).await;
     });
 
     rx

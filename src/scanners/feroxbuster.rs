@@ -23,7 +23,8 @@ fn default_wordlist() -> Option<PathBuf> {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        let p = PathBuf::from("/usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt");
+        let p =
+            PathBuf::from("/usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt");
         if p.exists() {
             return Some(p);
         }
@@ -112,9 +113,8 @@ pub async fn run(target: &str) -> Result<ScanResult> {
 
 /// File extensions that indicate static assets (not interesting endpoints).
 const STATIC_EXTENSIONS: &[&str] = &[
-    ".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico",
-    ".woff", ".woff2", ".ttf", ".eot", ".map", ".mp4", ".webm",
-    ".mp3", ".wav", ".pdf",
+    ".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".woff", ".woff2", ".ttf",
+    ".eot", ".map", ".mp4", ".webm", ".mp3", ".wav", ".pdf",
 ];
 
 /// Returns true if the URL path points to a static asset.
@@ -125,9 +125,8 @@ fn is_static_asset(url: &str) -> bool {
 
 /// Returns true if the URL contains excessive percent-encoding (garbage/binary).
 fn is_garbage_url(url: &str) -> bool {
-    let encoded_count = url.matches("%EF%BF%BD").count()
-        + url.matches("%00").count()
-        + url.matches("%C9").count();
+    let encoded_count =
+        url.matches("%EF%BF%BD").count() + url.matches("%00").count() + url.matches("%C9").count();
     encoded_count >= 3
 }
 

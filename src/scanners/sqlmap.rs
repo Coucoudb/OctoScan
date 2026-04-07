@@ -28,7 +28,7 @@ pub async fn run(target: &str) -> Result<ScanResult> {
             "-u",
             target,
             "--batch",
-            "--level=3",          // test cookies, user-agent, referer
+            "--level=3", // test cookies, user-agent, referer
             "--risk=2",
             "--threads=4",
             "--random-agent",     // randomize user-agent (WAF evasion)

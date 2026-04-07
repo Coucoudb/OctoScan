@@ -259,6 +259,11 @@ fn draw_scanner_select(f: &mut Frame, area: Rect, app: &App) {
             7,
             "SQLMap — SQL injection verification (runs after ZAP/Nuclei)",
         ),
+        (
+            Some("Brute-force"),
+            8,
+            "Hydra — Credential brute-force (runs after Nmap)",
+        ),
     ];
 
     let mut items: Vec<ListItem> = Vec::new();

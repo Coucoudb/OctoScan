@@ -160,6 +160,7 @@ fn get_cmd_name(scanner: &ScannerType) -> &'static str {
                 "wpscan"
             }
         }
+        ScannerType::Hydra => "hydra",
     }
 }
 
@@ -235,6 +236,15 @@ fn get_install_hint(scanner: &ScannerType) -> String {
                 "brew install wpscan".to_string()
             } else {
                 "sudo apt install wpscan  (or)  gem install wpscan".to_string()
+            }
+        }
+        ScannerType::Hydra => {
+            if cfg!(target_os = "windows") {
+                "Download from https://github.com/maaaaz/thc-hydra-windows/releases".to_string()
+            } else if cfg!(target_os = "macos") {
+                "brew install hydra".to_string()
+            } else {
+                "sudo apt install hydra  (or)  sudo dnf install hydra".to_string()
             }
         }
     }
@@ -344,6 +354,17 @@ fn get_install_method(scanner: &ScannerType) -> Option<InstallMethod> {
             } else {
                 Some(InstallMethod::ShellCmd(
                     "sudo apt-get install -y wpscan || gem install wpscan".to_string(),
+                ))
+            }
+        }
+        ScannerType::Hydra => {
+            if cfg!(target_os = "windows") {
+                Some(InstallMethod::PsScript(hydra_ps_script()))
+            } else if cfg!(target_os = "macos") {
+                Some(InstallMethod::ShellCmd("brew install hydra".to_string()))
+            } else {
+                Some(InstallMethod::ShellCmd(
+                    "sudo apt-get install -y hydra || sudo dnf install -y hydra".to_string(),
                 ))
             }
         }
@@ -802,6 +823,78 @@ fn wpscan_ps_script() -> String {
         "    Write-Host \"WPScan installed at $($finalCheck.Source)\"",
         "} else {",
         "    Write-Error 'WPScan installation failed — wpscan not found in PATH'",
+        "    exit 1",
+        "}",
+    ]
+    .join("\r\n")
+}
+
+fn hydra_ps_script() -> String {
+    [
+        "$ErrorActionPreference = 'Stop'",
+        "",
+        "# Download THC-Hydra Windows build from GitHub",
+        "$installDir = Join-Path $env:LOCALAPPDATA 'hydra'",
+        "New-Item -ItemType Directory -Path $installDir -Force | Out-Null",
+        "",
+        "# Download latest release zip",
+        "$releasePage = 'https://api.github.com/repos/maaaaz/thc-hydra-windows/releases/latest'",
+        "try {",
+        "    $release = Invoke-RestMethod -Uri $releasePage -UseBasicParsing",
+        "    $asset = $release.assets | Where-Object { $_.name -match '\\.zip$' } | Select-Object -First 1",
+        "    if (-not $asset) { throw 'No zip asset found' }",
+        "    $zipUrl = $asset.browser_download_url",
+        "} catch {",
+        "    # Fallback: direct known URL",
+        "    $zipUrl = 'https://github.com/maaaaz/thc-hydra-windows/releases/download/v9.5/thc-hydra-9.5-win64.zip'",
+        "}",
+        "",
+        "$zipPath = Join-Path $env:TEMP 'hydra.zip'",
+        "Write-Host \"Downloading Hydra from $zipUrl...\"",
+        "Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing",
+        "",
+        "Write-Host 'Extracting...'",
+        "Expand-Archive -Path $zipPath -DestinationPath $installDir -Force",
+        "Remove-Item $zipPath -Force",
+        "",
+        "# Find hydra.exe (may be in a subfolder)",
+        "$hydraExe = Get-ChildItem -Path $installDir -Recurse -Filter 'hydra.exe' | Select-Object -First 1",
+        "if (-not $hydraExe) {",
+        "    Write-Error 'hydra.exe not found after extraction'",
+        "    exit 1",
+        "}",
+        "$hydraDir = $hydraExe.DirectoryName",
+        "",
+        "# Add to user PATH",
+        "$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')",
+        "if ($userPath -notlike \"*$hydraDir*\") {",
+        "    [Environment]::SetEnvironmentVariable('Path', \"$userPath;$hydraDir\", 'User')",
+        "    Write-Host \"Added $hydraDir to user PATH\"",
+        "}",
+        "$env:Path = \"$env:Path;$hydraDir\"",
+        "",
+        "# Download small wordlists for brute-force",
+        "$wlDir = Join-Path $installDir 'wordlists'",
+        "New-Item -ItemType Directory -Path $wlDir -Force | Out-Null",
+        "",
+        "$userFile = Join-Path $wlDir 'top-usernames-shortlist.txt'",
+        "if (-not (Test-Path $userFile)) {",
+        "    Write-Host 'Downloading username wordlist...'",
+        "    Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/danielmiessler/SecLists/master/Usernames/top-usernames-shortlist.txt' -OutFile $userFile -UseBasicParsing",
+        "}",
+        "",
+        "$passFile = Join-Path $wlDir 'common-credentials-10.txt'",
+        "if (-not (Test-Path $passFile)) {",
+        "    Write-Host 'Downloading password wordlist...'",
+        "    Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/danielmiessler/SecLists/master/Passwords/Common-Credentials/Pwdb_top-10000.txt' -OutFile $passFile -UseBasicParsing",
+        "}",
+        "",
+        "# Final check",
+        "$finalCheck = Get-Command hydra -ErrorAction SilentlyContinue",
+        "if ($finalCheck) {",
+        "    Write-Host \"Hydra installed at $($finalCheck.Source)\"",
+        "} else {",
+        "    Write-Error 'Hydra installation failed — hydra not found in PATH'",
         "    exit 1",
         "}",
     ]

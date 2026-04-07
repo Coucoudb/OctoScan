@@ -37,7 +37,7 @@ pub struct App {
     pub target_input: String,
     pub selected_scanners: Vec<ScannerType>,
     pub scanner_cursor: usize,
-    pub scanner_toggles: [bool; 8],
+    pub scanner_toggles: [bool; 9],
     pub scan_status: ScanStatus,
     pub results: Vec<ScanResult>,
     pub current_scanner_index: usize,
@@ -71,7 +71,7 @@ impl App {
             target_input: target,
             selected_scanners: scanners,
             scanner_cursor: 0,
-            scanner_toggles: [false; 8],
+            scanner_toggles: [false; 9],
             scan_status: ScanStatus::Idle,
             results: Vec::new(),
             current_scanner_index: 0,
@@ -102,7 +102,7 @@ impl App {
             target_input: String::new(),
             selected_scanners: Vec::new(),
             scanner_cursor: 0,
-            scanner_toggles: [false; 8],
+            scanner_toggles: [false; 9],
             scan_status: ScanStatus::Idle,
             results: Vec::new(),
             current_scanner_index: 0,
@@ -143,6 +143,8 @@ impl App {
             ScannerType::Zap,
             // Exploitation
             ScannerType::Sqlmap,
+            // Brute-force
+            ScannerType::Hydra,
         ]
     }
 
@@ -176,11 +178,15 @@ impl App {
         self.selected_scanners.contains(&ScannerType::Sqlmap)
     }
 
-    /// Get scanners to run in parallel (excludes Sqlmap which is conditional)
+    pub fn hydra_selected(&self) -> bool {
+        self.selected_scanners.contains(&ScannerType::Hydra)
+    }
+
+    /// Get scanners to run in parallel (excludes Sqlmap and Hydra which are conditional)
     pub fn parallel_scanners(&self) -> Vec<ScannerType> {
         self.selected_scanners
             .iter()
-            .filter(|s| **s != ScannerType::Sqlmap)
+            .filter(|s| **s != ScannerType::Sqlmap && **s != ScannerType::Hydra)
             .cloned()
             .collect()
     }
