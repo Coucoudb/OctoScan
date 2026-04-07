@@ -13,14 +13,18 @@
 ![Security Audit](https://img.shields.io/badge/Security-Audit-blue?style=for-the-badge&logo=opensourceinitiative&logoColor=white)
 ![Bug Bounty](https://img.shields.io/badge/Bug%20Bounty-Tool-orange?style=for-the-badge&logo=hackerone&logoColor=white)
 
-OctoScan is a CLI wrapper that orchestrates popular security tools (Nmap, Nuclei, ZAP, Feroxbuster, SQLMap, Subfinder, httpx, WPScan) for fast and automated web reconnaissance and auditing. It features an interactive terminal UI for navigating scans and results.
+OctoScan is a CLI wrapper that orchestrates popular security tools (Nmap, Nuclei, ZAP, Feroxbuster, SQLMap, Subfinder, httpx, WPScan, Hydra) for fast and automated web reconnaissance and auditing. It features an interactive terminal UI for navigating scans and results.
 
 ## Features
 
 - **Interactive TUI** — Navigate menus, select scanners, and browse results with keyboard shortcuts
-- **Multi-scanner orchestration** — Run Nmap, Nuclei, ZAP, Feroxbuster, SQLMap, Subfinder, httpx, and WPScan from a single interface
+- **Multi-scanner orchestration** — Run Nmap, Nuclei, ZAP, Feroxbuster, SQLMap, Subfinder, httpx, WPScan, and Hydra from a single interface
 - **Parallel execution** — All selected scanners run simultaneously with live status indicators
-- **Smart SQLMap chaining** — Automatically runs SQLMap on endpoints where ZAP or Nuclei detected SQL injection
+- **Smart pipelines** — Automated chaining between scanners:
+  - **Subfinder → httpx** — Probes discovered subdomains automatically
+  - **httpx/Nuclei/Nmap → WPScan** — Runs WPScan if WordPress is detected
+  - **ZAP/Nuclei → SQLMap** — Runs SQLMap on endpoints where SQL injection was detected
+  - **Nmap → Hydra** — Brute-forces credentials on services discovered by Nmap (SSH, FTP, MySQL, etc.)
 - **Auto-installation** — Automatically detects and installs missing tools on Windows, macOS, and Linux
 - **Structured findings** — Parsed results with severity levels (Critical, High, Medium, Low, Info)
 - **Export** — Save reports as JSON or TXT
@@ -41,8 +45,9 @@ OctoScan orchestrates the following security tools:
 | [Subfinder](https://github.com/projectdiscovery/subfinder) | `apt install subfinder` / `brew install subfinder` / [GitHub Releases](https://github.com/projectdiscovery/subfinder/releases) |
 | [httpx](https://github.com/projectdiscovery/httpx) | `apt install httpx` / `brew install httpx` / [GitHub Releases](https://github.com/projectdiscovery/httpx/releases) |
 | [WPScan](https://wpscan.com/) | `apt install wpscan` / `brew install wpscan` / `gem install wpscan` (requires Ruby) |
+| [Hydra](https://github.com/vanhauser-thc/thc-hydra) | `apt install hydra` / `brew install hydra` / [GitHub Releases](https://github.com/maaaaz/thc-hydra-windows/releases) |
 
-> **Note:** On Windows, OctoScan can **automatically install** missing tools when you press `i` on the tool check screen. It handles Npcap, VC++ 2013 runtime, Nmap, Nuclei, ZAP, Feroxbuster, SQLMap, Subfinder, httpx, WPScan (Ruby + DevKit + libcurl), and Java 17 dependencies.
+> **Note:** On Windows, OctoScan can **automatically install** missing tools when you press `i` on the tool check screen. It handles Npcap, VC++ 2013 runtime, Nmap, Nuclei, ZAP, Feroxbuster, SQLMap, Subfinder, httpx, WPScan (Ruby + DevKit + libcurl), Hydra, and Java 17 dependencies.
 
 ## Installation
 
@@ -92,11 +97,11 @@ octoscan scan -t example.com -s subfinder,httpx
 # WordPress vulnerability scan
 octoscan scan -t https://example.com -s wpscan
 
-# Scan and export to JSON
-octoscan scan -t https://example.com -s nmap,nuclei,zap,feroxbuster -o report.json
+# Nmap + credential brute-force
+octoscan scan -t 192.168.1.1 -s nmap,hydra
 
-# Scan and export to TXT
-octoscan scan -t 192.168.1.1 -s nmap,feroxbuster -o report.txt
+# Full scan with all scanners
+octoscan scan -t https://example.com -s nmap,nuclei,zap,feroxbuster,sqlmap,hydra -o report.json
 ```
 
 ## Project Structure
@@ -120,7 +125,8 @@ src/
     ├── subfinder.rs  # Subfinder subdomain enumeration
     ├── httpx.rs      # httpx HTTP probing & tech detection
     ├── wpscan.rs     # WPScan WordPress vulnerability scanning
-    └── sqlmap.rs     # SQLMap integration (conditional, post-scan)
+    ├── sqlmap.rs     # SQLMap integration (conditional, post-scan)
+    └── hydra.rs      # Hydra credential brute-force (conditional, post-Nmap)
 ```
 
 ## CI
