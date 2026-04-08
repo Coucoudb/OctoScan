@@ -1,0 +1,117 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: octoscan-linux-x86_64
+            binary: target/x86_64-unknown-linux-gnu/release/octoscan
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: octoscan-windows-x86_64.exe
+            binary: target/x86_64-pc-windows-msvc/release/octoscan.exe
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: octoscan-macos-arm64
+            binary: target/aarch64-apple-darwin/release/octoscan
+          - os: macos-13
+            target: x86_64-apple-darwin
+            artifact: octoscan-macos-x86_64
+            binary: target/x86_64-apple-darwin/release/octoscan
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Rename binary
+        shell: bash
+        run: |
+          cp "${{ matrix.binary }}" "${{ matrix.artifact }}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+
+  release:
+    name: Create Release
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        uses: orhun/git-cliff-action@v4
+        id: changelog
+        with:
+          config: cliff.toml
+          args: --latest --strip header
+        env:
+          OUTPUT: CHANGES.md
+          GITHUB_REPO: ${{ github.repository }}
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v5
+        with:
+          path: artifacts/
+
+      - name: Prepare release assets and checksums
+        run: |
+          mkdir -p release/
+
+          # Move all binaries to release dir with version in name
+          TAG="${GITHUB_REF_NAME}"
+          for dir in artifacts/*/; do
+            for file in "$dir"*; do
+              name=$(basename "$file")
+              # Insert tag into filename: octoscan-linux-x86_64 → octoscan-${TAG}-linux-x86_64
+              versioned=$(echo "$name" | sed "s/^octoscan-/octoscan-${TAG}-/")
+              cp "$file" "release/${versioned}"
+            done
+          done
+
+          # Make Linux/macOS binaries executable
+          chmod +x release/octoscan-*-linux-* release/octoscan-*-macos-* 2>/dev/null || true
+
+          # Generate SHA256 checksums
+          cd release/
+          sha256sum * > checksums-sha256.txt
+          cat checksums-sha256.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: OctoScan ${{ github.ref_name }}
+          body: ${{ steps.changelog.outputs.content }}
+          files: release/*
+          draft: false
+          prerelease: false
+          make_latest: true

@@ -5,9 +5,11 @@ Thank you for your interest in contributing to OctoScan! This document describes
 ## Table of Contents
 
 - [Building the Project](#building-the-project)
+- [Pre-commit Hooks](#pre-commit-hooks)
 - [Naming Conventions](#naming-conventions)
 - [Branching Strategy](#branching-strategy)
 - [CI Pipeline](#ci-pipeline)
+- [Changelog](#changelog)
 - [Submitting a Merge Request](#submitting-a-merge-request)
 - [Adding a New Scanner](#adding-a-new-scanner)
 
@@ -54,6 +56,33 @@ cargo test
 ```
 
 > **Tip:** Always run `cargo fmt` and `cargo clippy -- -D warnings` locally before pushing. The CI pipeline will reject code that fails either check.
+
+---
+
+## Pre-commit Hooks
+
+The repository includes a Git hook that automatically runs `cargo fmt --check` and `cargo clippy -- -D warnings` before every commit, so formatting and lint issues are caught locally before reaching CI.
+
+### Setup (one-time)
+
+```bash
+git config core.hooksPath .githooks
+```
+
+This tells Git to use the hooks in `.githooks/` instead of the default `.git/hooks/`. The pre-commit hook will now run automatically on every `git commit`.
+
+### What it checks
+
+1. **`cargo fmt -- --check`** — Rejects the commit if code is not formatted. Run `cargo fmt` to fix.
+2. **`cargo clippy --all-targets -- -D warnings`** — Rejects the commit if Clippy reports any warnings.
+
+### Skipping the hook (emergency only)
+
+```bash
+git commit --no-verify -m "fix: urgent hotfix"
+```
+
+> Only skip hooks when absolutely necessary. CI will still enforce the same checks.
 
 ---
 
@@ -136,8 +165,35 @@ GitHub Actions runs automatically on every push and pull request to `main` and `
 | **Audit** | `cargo audit`     | Detects known vulnerabilities in dependencies   |
 | **SAST**  | Semgrep           | Static analysis for security issues (SARIF)     |
 | **Build** | `cargo build`     | Release build on Linux, Windows, and macOS      |
+| **Changelog** | `git-cliff`   | Auto-generates release notes from Conventional Commits |
 
 > A failing pipeline blocks the merge. Fix all issues before requesting review.
+
+---
+
+## Changelog
+
+The project uses [git-cliff](https://git-cliff.org/) to auto-generate `CHANGELOG.md` from Conventional Commits. The configuration lives in `cliff.toml`.
+
+### How it works
+
+- On every push to `main`, the CI release job runs `git-cliff --latest` to generate the release notes for the GitHub Release.
+- The full `CHANGELOG.md` is maintained in the repository and can be regenerated locally.
+
+### Regenerate locally
+
+```bash
+# Install git-cliff (one-time)
+cargo install git-cliff
+
+# Regenerate the full changelog
+git-cliff --output CHANGELOG.md
+
+# Preview the changelog for the next (unreleased) version
+git-cliff --unreleased
+```
+
+> **Important:** Because the changelog is generated from commit messages, following the [Conventional Commits](https://www.conventionalcommits.org/) format is essential. Non-conforming commits are excluded from the changelog.
 
 ---
 
