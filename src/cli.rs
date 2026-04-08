@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand};
 #[command(
     name = "octoscan",
     about = "🐙 OctoScan - CLI security auditing tool",
-    long_about = "OctoScan orchestrates popular security tools (Nmap, Nuclei, ZAP, Feroxbuster, SQLMap) for fast and automated web reconnaissance and auditing.",
+    long_about = "OctoScan orchestrates popular security tools (Nmap, Nuclei, ZAP, Feroxbuster, SQLMap, Subfinder, httpx, WPScan, Hydra) for fast and automated web reconnaissance and auditing.",
     version
 )]
 pub struct Cli {
@@ -20,7 +20,7 @@ pub enum Commands {
         #[arg(short, long)]
         target: String,
 
-        /// Scanners to use (nmap, nuclei, zap, feroxbuster, sqlmap)
+        /// Scanners to use (nmap, nuclei, zap, feroxbuster, sqlmap, subfinder, httpx, wpscan, hydra)
         #[arg(short, long, value_delimiter = ',')]
         scanners: Vec<String>,
 

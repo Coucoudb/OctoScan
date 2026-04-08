@@ -1,0 +1,30 @@
+#!/bin/sh
+#
+# Pre-commit hook for OctoScan
+# Runs cargo fmt and cargo clippy on staged changes before allowing a commit.
+#
+# Setup:  git config core.hooksPath .githooks
+
+set -e
+
+echo "🔍 Running pre-commit checks..."
+
+# 1. Check formatting
+echo "  Checking formatting (cargo fmt)..."
+if ! cargo fmt -- --check 2>/dev/null; then
+    echo ""
+    echo "❌ Formatting check failed."
+    echo "   Run 'cargo fmt' to fix, then stage the changes."
+    exit 1
+fi
+
+# 2. Run clippy
+echo "  Running linter (cargo clippy)..."
+if ! cargo clippy --all-targets -- -D warnings 2>/dev/null; then
+    echo ""
+    echo "❌ Clippy found warnings/errors."
+    echo "   Fix the issues above, then stage the changes."
+    exit 1
+fi
+
+echo "✅ All pre-commit checks passed."
