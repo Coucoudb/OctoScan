@@ -1,0 +1,4 @@
+Hydra v9.5 (c) 2023 by van Hauser/THC & David Maciejak
+[DATA] attacking ftp://10.0.0.1:21/
+[21][ftp] host: 10.0.0.1   login: anonymous   password: 
+[STATUS] attack finished for 10.0.0.1

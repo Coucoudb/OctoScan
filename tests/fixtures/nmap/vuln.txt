@@ -1,0 +1,15 @@
+Starting Nmap 7.94 ( https://nmap.org ) at 2024-01-15 10:00 UTC
+Nmap scan report for example.com (93.184.216.34)
+Host is up (0.012s latency).
+
+PORT     STATE SERVICE VERSION
+22/tcp   open  ssh     OpenSSH 8.9p1
+80/tcp   open  http    Apache httpd 2.4.49
+| http-vuln-cve2021-41773:
+|   VULNERABLE:
+|   Path traversal and file disclosure vulnerability in Apache HTTP Server 2.4.49
+|     State: VULNERABLE
+|     IDs:  CVE:CVE-2021-41773
+443/tcp  open  https   nginx 1.18.0
+
+Nmap done: 1 IP address (1 host up) scanned in 42.31 seconds

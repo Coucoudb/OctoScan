@@ -17,5 +17,5 @@ Thumbs.db
 
 # OctoScan reports
 *.json
-*.txt
+# *.txt
 !README.md
