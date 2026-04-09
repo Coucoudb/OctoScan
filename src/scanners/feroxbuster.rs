@@ -189,3 +189,51 @@ fn parse_feroxbuster_output(output: &str) -> Vec<Finding> {
 
     findings
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_normal_output() {
+        let input = include_str!("../../tests/fixtures/feroxbuster/normal.jsonl");
+        let findings = parse_feroxbuster_output(input);
+        assert_eq!(findings.len(), 3);
+        assert!(findings[0].title.contains("200"));
+        assert!(findings[0].title.contains("/admin"));
+        assert!(findings[1].title.contains("403"));
+        assert!(matches!(findings[1].severity, Severity::Medium));
+        assert!(findings[2].title.contains("301"));
+        assert!(matches!(findings[2].severity, Severity::Low));
+    }
+
+    #[test]
+    fn parse_empty_output() {
+        let input = include_str!("../../tests/fixtures/feroxbuster/empty.jsonl");
+        let findings = parse_feroxbuster_output(input);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn parse_filtered_output_skips_static_and_garbage() {
+        let input = include_str!("../../tests/fixtures/feroxbuster/filtered.jsonl");
+        let findings = parse_feroxbuster_output(input);
+        // Should skip: .css, .png, 500 status, garbage URL, statistics type
+        // Should keep: /real-endpoint
+        assert_eq!(findings.len(), 1);
+        assert!(findings[0].title.contains("real-endpoint"));
+    }
+
+    #[test]
+    fn is_static_asset_detection() {
+        assert!(is_static_asset("http://example.com/style.css"));
+        assert!(is_static_asset("http://example.com/logo.PNG"));
+        assert!(!is_static_asset("http://example.com/api/users"));
+    }
+
+    #[test]
+    fn is_garbage_url_detection() {
+        assert!(is_garbage_url("http://example.com/%EF%BF%BD%EF%BF%BD%EF%BF%BD"));
+        assert!(!is_garbage_url("http://example.com/normal-path"));
+    }
+}

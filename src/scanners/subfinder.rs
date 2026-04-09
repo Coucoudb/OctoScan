@@ -96,3 +96,39 @@ fn parse_subfinder_output(output: &str) -> Vec<Finding> {
 
     findings
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_normal_output() {
+        let input = include_str!("../../tests/fixtures/subfinder/normal.txt");
+        let findings = parse_subfinder_output(input);
+        assert_eq!(findings.len(), 5);
+        assert!(findings[0].title.contains("www.example.com"));
+        assert!(findings[1].title.contains("mail.example.com"));
+        assert!(matches!(findings[0].severity, Severity::Info));
+    }
+
+    #[test]
+    fn parse_empty_output() {
+        let input = include_str!("../../tests/fixtures/subfinder/empty.txt");
+        let findings = parse_subfinder_output(input);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn parse_single_subdomain() {
+        let input = include_str!("../../tests/fixtures/subfinder/single.txt");
+        let findings = parse_subfinder_output(input);
+        assert_eq!(findings.len(), 1);
+        assert!(findings[0].title.contains("www.example.com"));
+    }
+
+    #[test]
+    fn parse_completely_empty_string() {
+        let findings = parse_subfinder_output("");
+        assert!(findings.is_empty());
+    }
+}

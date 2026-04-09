@@ -214,3 +214,42 @@ pub async fn run_list(targets: &[String]) -> Result<ScanResult> {
         error: None,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_normal_output() {
+        let input = include_str!("../../tests/fixtures/httpx/normal.jsonl");
+        let findings = parse_httpx_output(input);
+        assert_eq!(findings.len(), 2);
+        assert!(findings[0].title.contains("https://example.com"));
+        assert!(findings[0].title.contains("200"));
+        assert!(findings[0].description.contains("Nginx, PHP"));
+        assert!(findings[1].description.contains("None detected"));
+    }
+
+    #[test]
+    fn parse_empty_output() {
+        let input = include_str!("../../tests/fixtures/httpx/empty.jsonl");
+        let findings = parse_httpx_output(input);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn parse_malformed_output_skips_bad_lines() {
+        let input = include_str!("../../tests/fixtures/httpx/malformed.jsonl");
+        let findings = parse_httpx_output(input);
+        // Only valid JSON lines produce findings
+        assert_eq!(findings.len(), 2);
+        assert!(findings[0].title.contains("valid.example.com"));
+        assert!(findings[1].title.contains("also-valid.example.com"));
+    }
+
+    #[test]
+    fn parse_completely_empty_string() {
+        let findings = parse_httpx_output("");
+        assert!(findings.is_empty());
+    }
+}

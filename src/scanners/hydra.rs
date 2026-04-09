@@ -269,3 +269,60 @@ pub fn is_supported_service(service: &str) -> bool {
         || s.contains("microsoft-ds")
         || s.contains("netbios")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_normal_output() {
+        let input = include_str!("../../tests/fixtures/hydra/normal.txt");
+        let findings = parse_hydra_output(input, "10.0.0.1", 22, "ssh");
+        assert_eq!(findings.len(), 2);
+        assert!(findings[0].title.contains("Weak credentials"));
+        assert!(matches!(findings[0].severity, Severity::Critical));
+        assert!(findings[0].description.contains("admin"));
+        assert!(findings[0].description.contains("admin123"));
+        assert!(findings[1].description.contains("root"));
+        assert!(findings[1].description.contains("toor"));
+    }
+
+    #[test]
+    fn parse_empty_output_no_creds() {
+        let input = include_str!("../../tests/fixtures/hydra/empty.txt");
+        let findings = parse_hydra_output(input, "10.0.0.1", 22, "ssh");
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn parse_multi_service_output() {
+        let input = include_str!("../../tests/fixtures/hydra/multi_service.txt");
+        let findings = parse_hydra_output(input, "10.0.0.1", 21, "ftp");
+        assert_eq!(findings.len(), 1);
+        assert!(findings[0].title.contains("ftp"));
+        assert!(findings[0].description.contains("anonymous"));
+    }
+
+    #[test]
+    fn parse_completely_empty_string() {
+        let findings = parse_hydra_output("", "10.0.0.1", 22, "ssh");
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn map_service_names() {
+        assert_eq!(map_service("ssh"), "ssh");
+        assert_eq!(map_service("ms-wbt-server"), "rdp");
+        assert_eq!(map_service("microsoft-ds"), "smb");
+        assert_eq!(map_service("https"), "https-get");
+        assert_eq!(map_service("http"), "http-get");
+    }
+
+    #[test]
+    fn supported_service_detection() {
+        assert!(is_supported_service("ssh"));
+        assert!(is_supported_service("ftp"));
+        assert!(is_supported_service("ms-wbt-server"));
+        assert!(!is_supported_service("unknown-service"));
+    }
+}

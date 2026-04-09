@@ -317,3 +317,62 @@ fn decode_xml_entities(s: &str) -> String {
         .trim()
         .to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_xml_output() {
+        let input = include_str!("../../tests/fixtures/zap/normal.xml");
+        let findings = parse_zap_output(input);
+        assert_eq!(findings.len(), 2);
+        assert_eq!(findings[0].title, "Cross-Site Scripting (Reflected)");
+        assert!(matches!(findings[0].severity, Severity::High));
+        assert_eq!(findings[1].title, "Cookie Without Secure Flag");
+        assert!(matches!(findings[1].severity, Severity::Low));
+    }
+
+    #[test]
+    fn parse_json_output() {
+        let input = include_str!("../../tests/fixtures/zap/alerts.json");
+        let findings = parse_zap_output(input);
+        assert_eq!(findings.len(), 3);
+        assert_eq!(findings[0].title, "SQL Injection");
+        assert!(matches!(findings[0].severity, Severity::High));
+        assert_eq!(findings[1].title, "X-Frame-Options Header Not Set");
+        assert!(matches!(findings[1].severity, Severity::Medium));
+    }
+
+    #[test]
+    fn parse_text_output() {
+        let input = include_str!("../../tests/fixtures/zap/text.txt");
+        let findings = parse_zap_output(input);
+        // WARN-NEW and FAIL-NEW lines should produce findings
+        let warn_findings: Vec<_> = findings.iter().filter(|f| matches!(f.severity, Severity::Medium)).collect();
+        let fail_findings: Vec<_> = findings.iter().filter(|f| matches!(f.severity, Severity::High)).collect();
+        assert!(!warn_findings.is_empty());
+        assert!(!fail_findings.is_empty());
+    }
+
+    #[test]
+    fn parse_empty_output() {
+        let input = include_str!("../../tests/fixtures/zap/empty.txt");
+        let findings = parse_zap_output(input);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn decode_xml_entities_basic() {
+        let decoded = decode_xml_entities("&lt;p&gt;Hello &amp; world&lt;/p&gt;");
+        assert_eq!(decoded, "Hello & world");
+    }
+
+    #[test]
+    fn extract_xml_tag_basic() {
+        let xml = "<alertitem><name>Test Alert</name><riskcode>2</riskcode></alertitem>";
+        assert_eq!(extract_xml_tag(xml, "name"), Some("Test Alert".to_string()));
+        assert_eq!(extract_xml_tag(xml, "riskcode"), Some("2".to_string()));
+        assert_eq!(extract_xml_tag(xml, "missing"), None);
+    }
+}

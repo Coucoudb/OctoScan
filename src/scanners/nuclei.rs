@@ -125,3 +125,44 @@ fn parse_nuclei_output(output: &str) -> Vec<Finding> {
 
     findings
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_normal_output() {
+        let input = include_str!("../../tests/fixtures/nuclei/normal.jsonl");
+        let findings = parse_nuclei_output(input);
+        assert_eq!(findings.len(), 3);
+        assert_eq!(findings[0].title, "Apache Log4j RCE");
+        assert!(matches!(findings[0].severity, Severity::Critical));
+        assert_eq!(findings[1].title, "Admin Panel Exposed");
+        assert!(matches!(findings[1].severity, Severity::Medium));
+        assert_eq!(findings[2].title, "Missing HSTS Header");
+        assert!(matches!(findings[2].severity, Severity::Low));
+    }
+
+    #[test]
+    fn parse_empty_output() {
+        let input = include_str!("../../tests/fixtures/nuclei/empty.jsonl");
+        let findings = parse_nuclei_output(input);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn parse_malformed_output_skips_bad_lines() {
+        let input = include_str!("../../tests/fixtures/nuclei/malformed.jsonl");
+        let findings = parse_nuclei_output(input);
+        // Only valid JSON lines produce findings
+        assert_eq!(findings.len(), 2);
+        assert_eq!(findings[0].title, "Valid Finding");
+        assert_eq!(findings[1].title, "Second Valid");
+    }
+
+    #[test]
+    fn parse_completely_empty_string() {
+        let findings = parse_nuclei_output("");
+        assert!(findings.is_empty());
+    }
+}

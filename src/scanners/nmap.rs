@@ -119,3 +119,44 @@ fn parse_nmap_output(output: &str) -> Vec<Finding> {
 
     findings
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_normal_output() {
+        let input = include_str!("../../tests/fixtures/nmap/normal.txt");
+        let findings = parse_nmap_output(input);
+        assert_eq!(findings.len(), 3);
+        assert!(findings[0].title.contains("22/tcp"));
+        assert!(findings[1].title.contains("80/tcp"));
+        assert!(findings[2].title.contains("443/tcp"));
+        assert!(matches!(findings[0].severity, Severity::Info));
+    }
+
+    #[test]
+    fn parse_empty_output() {
+        let input = include_str!("../../tests/fixtures/nmap/empty.txt");
+        let findings = parse_nmap_output(input);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn parse_vuln_output() {
+        let input = include_str!("../../tests/fixtures/nmap/vuln.txt");
+        let findings = parse_nmap_output(input);
+        // Should find open ports + vulnerability markers
+        let port_findings: Vec<_> = findings.iter().filter(|f| f.title.starts_with("Open port")).collect();
+        let vuln_findings: Vec<_> = findings.iter().filter(|f| f.title == "NSE Vulnerability Detected").collect();
+        assert_eq!(port_findings.len(), 3);
+        assert!(!vuln_findings.is_empty());
+        assert!(matches!(vuln_findings[0].severity, Severity::High));
+    }
+
+    #[test]
+    fn parse_completely_empty_string() {
+        let findings = parse_nmap_output("");
+        assert!(findings.is_empty());
+    }
+}

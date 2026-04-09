@@ -1,0 +1,3 @@
+{"template-id":"cve-2021-44228","info":{"name":"Apache Log4j RCE","severity":"critical","description":"Apache Log4j2 allows RCE via JNDI."},"matched-at":"http://example.com:8080/api"}
+{"template-id":"exposed-panels","info":{"name":"Admin Panel Exposed","severity":"medium","description":"Admin panel is publicly accessible."},"matched-at":"http://example.com/admin"}
+{"template-id":"missing-hsts","info":{"name":"Missing HSTS Header","severity":"low","description":"HSTS header is not set."},"matched-at":"http://example.com"}

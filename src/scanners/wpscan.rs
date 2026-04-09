@@ -273,3 +273,45 @@ fn find_msys2_bin_paths() -> Vec<String> {
     }
     paths
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_normal_output() {
+        let input = include_str!("../../tests/fixtures/wpscan/normal.json");
+        let findings = parse_wpscan_output(input);
+        // WordPress version + theme + plugin + 2 users
+        assert!(findings.len() >= 4);
+        assert!(findings[0].title.contains("WordPress 6.4.2"));
+        assert!(matches!(findings[0].severity, Severity::Info)); // latest
+        let user_findings: Vec<_> = findings.iter().filter(|f| f.title.starts_with("User:")).collect();
+        assert_eq!(user_findings.len(), 2);
+    }
+
+    #[test]
+    fn parse_empty_output_invalid_json() {
+        let input = include_str!("../../tests/fixtures/wpscan/empty.json");
+        let findings = parse_wpscan_output(input);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn parse_vulnerable_output() {
+        let input = include_str!("../../tests/fixtures/wpscan/vulnerable.json");
+        let findings = parse_wpscan_output(input);
+        // Should find: WP version (outdated), RCE vuln, theme + XSS vuln, plugin + LFI + SQLi vulns, user
+        let vuln_count = findings.iter().filter(|f| !matches!(f.severity, Severity::Info) && !matches!(f.severity, Severity::Low)).count();
+        assert!(vuln_count >= 3); // RCE (Critical), XSS (Medium), LFI (Medium), SQLi (High)
+        // WordPress should be marked as outdated (Medium)
+        assert!(matches!(findings[0].severity, Severity::Medium));
+        assert!(findings[0].title.contains("5.2.1"));
+    }
+
+    #[test]
+    fn parse_completely_empty_string() {
+        let findings = parse_wpscan_output("");
+        assert!(findings.is_empty());
+    }
+}

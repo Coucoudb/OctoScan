@@ -180,3 +180,46 @@ fn parse_sqlmap_output(output: &str) -> Vec<Finding> {
 
     findings
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_normal_output() {
+        let input = include_str!("../../tests/fixtures/sqlmap/normal.txt");
+        let findings = parse_sqlmap_output(input);
+        // Should find: 2 injection types + 1 DBMS identification
+        let sqli_findings: Vec<_> = findings.iter().filter(|f| f.title.starts_with("SQL Injection")).collect();
+        let dbms_findings: Vec<_> = findings.iter().filter(|f| f.title == "Database Identified").collect();
+        assert_eq!(sqli_findings.len(), 2);
+        assert_eq!(dbms_findings.len(), 1);
+        assert!(sqli_findings[0].title.contains("boolean-based blind"));
+        assert!(sqli_findings[1].title.contains("time-based blind"));
+    }
+
+    #[test]
+    fn parse_empty_output_no_injection() {
+        let input = include_str!("../../tests/fixtures/sqlmap/empty.txt");
+        let findings = parse_sqlmap_output(input);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn parse_union_and_dump_output() {
+        let input = include_str!("../../tests/fixtures/sqlmap/union_and_dump.txt");
+        let findings = parse_sqlmap_output(input);
+        // UNION and stacked queries should be Critical severity
+        let critical_findings: Vec<_> = findings.iter().filter(|f| matches!(f.severity, Severity::Critical)).collect();
+        assert!(critical_findings.len() >= 2); // UNION sqli + stacked sqli + data extracted
+        // Should detect data dump
+        let dump_findings: Vec<_> = findings.iter().filter(|f| f.title == "Data Extracted").collect();
+        assert!(!dump_findings.is_empty());
+    }
+
+    #[test]
+    fn parse_completely_empty_string() {
+        let findings = parse_sqlmap_output("");
+        assert!(findings.is_empty());
+    }
+}
