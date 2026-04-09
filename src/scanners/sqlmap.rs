@@ -6,7 +6,7 @@ use tokio::process::Command;
 use super::{check_tool, Finding, ScanResult, ScannerType, Severity};
 
 /// Run sqlmap against a single target URL
-pub async fn run(target: &str) -> Result<ScanResult> {
+pub async fn run(target: &str, extra_args: &[String]) -> Result<ScanResult> {
     let started_at = Utc::now();
 
     if !check_tool("sqlmap").await {
@@ -23,20 +23,24 @@ pub async fn run(target: &str) -> Result<ScanResult> {
         });
     }
 
-    let output = Command::new("sqlmap")
-        .args([
-            "-u",
-            target,
-            "--batch",
-            "--level=3", // test cookies, user-agent, referer
-            "--risk=2",
-            "--threads=4",
-            "--random-agent",     // randomize user-agent (WAF evasion)
-            "--smart",            // thorough tests only on positive heuristic
-            "--technique=BEUSTQ", // all injection techniques
-            "--crawl=3",          // crawl the site to discover injectable endpoints
-            "--forms",            // parse and test forms
-        ])
+    let mut cmd = Command::new("sqlmap");
+    cmd.args([
+        "-u",
+        target,
+        "--batch",
+        "--level=3", // test cookies, user-agent, referer
+        "--risk=2",
+        "--threads=4",
+        "--random-agent",     // randomize user-agent (WAF evasion)
+        "--smart",            // thorough tests only on positive heuristic
+        "--technique=BEUSTQ", // all injection techniques
+        "--crawl=3",          // crawl the site to discover injectable endpoints
+        "--forms",            // parse and test forms
+    ]);
+    if !extra_args.is_empty() {
+        cmd.args(extra_args);
+    }
+    let output = cmd
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()

@@ -102,7 +102,27 @@ octoscan scan -t 192.168.1.1 -s nmap,hydra
 
 # Full scan with all scanners
 octoscan scan -t https://example.com -s nmap,nuclei,zap,feroxbuster,sqlmap,hydra -o report.json
+
+# Custom scanner arguments
+octoscan scan -t https://example.com -s nmap,nuclei \
+  --scanner-args "nmap=--script vuln --top-ports 100" \
+  --scanner-args "nuclei=-tags cve -severity critical"
 ```
+
+### Custom scanner arguments
+
+Use `--scanner-args` to pass extra flags to individual scanners. The format is `scanner=args` and can be repeated:
+
+```bash
+--scanner-args "nmap=-sV --script=http-enum"
+--scanner-args "nuclei=-tags cve,xss -t /path/to/templates"
+--scanner-args "feroxbuster=-w /path/to/wordlist.txt -d 3"
+--scanner-args "zap=-quickprogress"
+```
+
+Custom arguments are **appended** to the scanner's default flags. Shell metacharacters (`;`, `|`, `&`, `` ` ``, `$`, etc.) are rejected to prevent command injection.
+
+In **TUI mode**, a scanner arguments input screen appears after selecting scanners. Enter args in the format `scanner=args, scanner=args` or press Enter to skip.
 
 ## Project Structure
 

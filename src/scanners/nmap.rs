@@ -5,7 +5,7 @@ use tokio::process::Command;
 
 use super::{check_tool, Finding, ScanResult, ScannerType, Severity};
 
-pub async fn run(target: &str) -> Result<ScanResult> {
+pub async fn run(target: &str, extra_args: &[String]) -> Result<ScanResult> {
     let started_at = Utc::now();
 
     if !check_tool("nmap").await {
@@ -30,21 +30,25 @@ pub async fn run(target: &str) -> Result<ScanResult> {
         .next()
         .unwrap_or(target);
 
-    let output = Command::new("nmap")
-        .args([
-            "-sV", // service/version detection
-            "-sC", // default NSE scripts
-            "--script",
-            "vuln", // vulnerability detection scripts
-            "--top-ports",
-            "1000",
-            "-T4",    // aggressive timing
-            "--open", // only show open ports
-            "-Pn",    // skip host discovery (ICMP often blocked)
-            "--min-rate",
-            "1000",
-            host,
-        ])
+    let mut cmd = Command::new("nmap");
+    cmd.args([
+        "-sV", // service/version detection
+        "-sC", // default NSE scripts
+        "--script",
+        "vuln", // vulnerability detection scripts
+        "--top-ports",
+        "1000",
+        "-T4",    // aggressive timing
+        "--open", // only show open ports
+        "-Pn",    // skip host discovery (ICMP often blocked)
+        "--min-rate",
+        "1000",
+        host,
+    ]);
+    if !extra_args.is_empty() {
+        cmd.args(extra_args);
+    }
+    let output = cmd
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()

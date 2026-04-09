@@ -27,5 +27,10 @@ pub enum Commands {
         /// Export results to file (json or txt)
         #[arg(short, long)]
         output: Option<String>,
+
+        /// Custom arguments per scanner, format: "scanner=args" (can be repeated).
+        /// Example: --scanner-args "nmap=-sV --script=vuln" --scanner-args "nuclei=-tags cve"
+        #[arg(long = "scanner-args", value_name = "SCANNER=ARGS")]
+        scanner_args: Vec<String>,
     },
 }

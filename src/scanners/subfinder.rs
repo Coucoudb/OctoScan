@@ -5,7 +5,7 @@ use tokio::process::Command;
 
 use super::{check_tool, Finding, ScanResult, ScannerType, Severity};
 
-pub async fn run(target: &str) -> Result<ScanResult> {
+pub async fn run(target: &str, extra_args: &[String]) -> Result<ScanResult> {
     let started_at = Utc::now();
 
     if !check_tool("subfinder").await {
@@ -33,13 +33,17 @@ pub async fn run(target: &str) -> Result<ScanResult> {
         .next()
         .unwrap_or(target);
 
-    let output = Command::new("subfinder")
-        .args([
-            "-d", domain, "-silent", "-all", // use all sources
-            "-t", "50", // threads
-            "-timeout", "30",  // timeout per source (seconds)
-            "-nW", // remove wildcard subdomains
-        ])
+    let mut cmd = Command::new("subfinder");
+    cmd.args([
+        "-d", domain, "-silent", "-all", // use all sources
+        "-t", "50", // threads
+        "-timeout", "30",  // timeout per source (seconds)
+        "-nW", // remove wildcard subdomains
+    ]);
+    if !extra_args.is_empty() {
+        cmd.args(extra_args);
+    }
+    let output = cmd
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()

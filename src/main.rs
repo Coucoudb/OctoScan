@@ -21,6 +21,7 @@ async fn main() -> Result<()> {
             target,
             scanners: scanner_list,
             output,
+            scanner_args,
         }) => {
             let selected: Vec<scanners::ScannerType> =
                 scanner_list.iter().filter_map(|s| s.parse().ok()).collect();
@@ -30,8 +31,17 @@ async fn main() -> Result<()> {
                 std::process::exit(1);
             }
 
+            let parsed_args = match scanners::parse_scanner_args(&scanner_args) {
+                Ok(args) => args,
+                Err(e) => {
+                    eprintln!("Invalid --scanner-args: {}", e);
+                    std::process::exit(1);
+                }
+            };
+
             let mut app_state = app::App::new(target, selected);
             app_state.log_path = Some(log_path.to_string_lossy().to_string());
+            app_state.scanner_args = parsed_args;
             if let Some(out) = output {
                 app_state.set_export_path(out);
             }

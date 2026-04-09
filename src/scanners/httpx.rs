@@ -6,7 +6,7 @@ use tokio::process::Command;
 
 use super::{check_tool, Finding, ScanResult, ScannerType, Severity};
 
-pub async fn run(target: &str) -> Result<ScanResult> {
+pub async fn run(target: &str, extra_args: &[String]) -> Result<ScanResult> {
     let started_at = Utc::now();
 
     if !check_tool("httpx").await {
@@ -23,27 +23,31 @@ pub async fn run(target: &str) -> Result<ScanResult> {
         });
     }
 
-    let output = Command::new("httpx")
-        .args([
-            "-u",
-            target,
-            "-silent",
-            "-json",
-            "-status-code",
-            "-title",
-            "-tech-detect",
-            "-follow-redirects",
-            "-threads",
-            "50", // concurrency
-            "-timeout",
-            "10",              // per-request timeout
-            "-cdn",            // detect CDN usage
-            "-ip",             // extract IP addresses
-            "-cname",          // extract CNAME records
-            "-content-length", // show response size
-            "-web-server",     // detect web server
-            "-location",       // show redirect location
-        ])
+    let mut cmd = Command::new("httpx");
+    cmd.args([
+        "-u",
+        target,
+        "-silent",
+        "-json",
+        "-status-code",
+        "-title",
+        "-tech-detect",
+        "-follow-redirects",
+        "-threads",
+        "50", // concurrency
+        "-timeout",
+        "10",              // per-request timeout
+        "-cdn",            // detect CDN usage
+        "-ip",             // extract IP addresses
+        "-cname",          // extract CNAME records
+        "-content-length", // show response size
+        "-web-server",     // detect web server
+        "-location",       // show redirect location
+    ]);
+    if !extra_args.is_empty() {
+        cmd.args(extra_args);
+    }
+    let output = cmd
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()

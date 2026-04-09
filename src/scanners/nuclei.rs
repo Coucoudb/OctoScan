@@ -5,7 +5,7 @@ use tokio::process::Command;
 
 use super::{check_tool, Finding, ScanResult, ScannerType, Severity};
 
-pub async fn run(target: &str) -> Result<ScanResult> {
+pub async fn run(target: &str, extra_args: &[String]) -> Result<ScanResult> {
     let started_at = Utc::now();
 
     if !check_tool("nuclei").await {
@@ -22,26 +22,30 @@ pub async fn run(target: &str) -> Result<ScanResult> {
         });
     }
 
-    let output = Command::new("nuclei")
-        .args([
-            "-u",
-            target,
-            "-jsonl",
-            "-silent",
-            "-as", // auto-update templates
-            "-severity",
-            "critical,high,medium,low", // skip info-only noise
-            "-c",
-            "50", // concurrency (templates)
-            "-rl",
-            "150", // rate limit (req/s)
-            "-timeout",
-            "10", // per-request timeout
-            "-retries",
-            "2", // retry on transient errors
-            "-tags",
-            "cve,exposure,misconfig,default-login,xss,sqli,rce,lfi,ssrf",
-        ])
+    let mut cmd = Command::new("nuclei");
+    cmd.args([
+        "-u",
+        target,
+        "-jsonl",
+        "-silent",
+        "-as", // auto-update templates
+        "-severity",
+        "critical,high,medium,low", // skip info-only noise
+        "-c",
+        "50", // concurrency (templates)
+        "-rl",
+        "150", // rate limit (req/s)
+        "-timeout",
+        "10", // per-request timeout
+        "-retries",
+        "2", // retry on transient errors
+        "-tags",
+        "cve,exposure,misconfig,default-login,xss,sqli,rce,lfi,ssrf",
+    ]);
+    if !extra_args.is_empty() {
+        cmd.args(extra_args);
+    }
+    let output = cmd
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()

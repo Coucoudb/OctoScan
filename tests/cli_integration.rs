@@ -91,6 +91,71 @@ fn unknown_subcommand_fails() {
         .stderr(predicate::str::contains("unrecognized subcommand"));
 }
 
+// ─── --scanner-args via binary ──────────────────
+
+#[test]
+fn scanner_args_shown_in_help() {
+    octoscan()
+        .args(["scan", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--scanner-args"));
+}
+
+#[test]
+fn scanner_args_invalid_format_exits_with_error() {
+    octoscan()
+        .args([
+            "scan",
+            "-t",
+            "http://example.com",
+            "-s",
+            "nmap",
+            "--scanner-args",
+            "nmap -sV", // missing =
+        ])
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains("Invalid --scanner-args"));
+}
+
+#[test]
+fn scanner_args_invalid_scanner_name_exits_with_error() {
+    octoscan()
+        .args([
+            "scan",
+            "-t",
+            "http://example.com",
+            "-s",
+            "nmap",
+            "--scanner-args",
+            "notreal=-sV",
+        ])
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains("Invalid --scanner-args"));
+}
+
+#[test]
+fn scanner_args_shell_injection_rejected() {
+    octoscan()
+        .args([
+            "scan",
+            "-t",
+            "http://example.com",
+            "-s",
+            "nmap",
+            "--scanner-args",
+            "nmap=-sV; rm -rf /",
+        ])
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains("Invalid --scanner-args"));
+}
+
 // ─── Argument parsing via clap (unit-level, no binary spawn) ───
 
 #[test]

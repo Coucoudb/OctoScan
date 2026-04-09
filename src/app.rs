@@ -1,6 +1,7 @@
 use crate::installer::{InstallProgress, ToolStatus};
 use crate::scanners::{ScanResult, ScannerType};
 use chrono::{DateTime, Utc};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -8,6 +9,7 @@ pub enum AppScreen {
     Home,
     TargetInput,
     ScannerSelect,
+    ScannerArgs,
     ToolCheck,
     Installing,
     Scanning,
@@ -60,6 +62,10 @@ pub struct App {
     // Per-scanner status tracking for parallel execution
     pub scanner_statuses: Vec<(ScannerType, ScannerRunStatus)>,
     pub spin_tick: usize,
+    // Custom scanner arguments
+    pub scanner_args: HashMap<ScannerType, Vec<String>>,
+    pub scanner_args_input: String,
+    pub scanner_args_cursor: usize,
 }
 
 impl App {
@@ -91,6 +97,9 @@ impl App {
             log_path: None,
             scanner_statuses: Vec::new(),
             spin_tick: 0,
+            scanner_args: HashMap::new(),
+            scanner_args_input: String::new(),
+            scanner_args_cursor: 0,
         }
     }
 
@@ -122,6 +131,9 @@ impl App {
             log_path: None,
             scanner_statuses: Vec::new(),
             spin_tick: 0,
+            scanner_args: HashMap::new(),
+            scanner_args_input: String::new(),
+            scanner_args_cursor: 0,
         }
     }
 

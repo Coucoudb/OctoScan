@@ -19,7 +19,7 @@ fn find_zap_dir() -> Option<PathBuf> {
     None
 }
 
-pub async fn run(target: &str) -> Result<ScanResult> {
+pub async fn run(target: &str, extra_args: &[String]) -> Result<ScanResult> {
     let started_at = Utc::now();
 
     // Detect which ZAP command is available
@@ -57,6 +57,9 @@ pub async fn run(target: &str) -> Result<ScanResult> {
     } else {
         // zap-cli style
         cmd.args(["quick-scan", "--self-contained", "-s", "xss,sqli", target]);
+    }
+    if !extra_args.is_empty() {
+        cmd.args(extra_args);
     }
 
     let output = cmd

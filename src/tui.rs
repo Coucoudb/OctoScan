@@ -92,8 +92,11 @@ async fn run_event_loop(
                             app.started_at = Some(chrono::Utc::now());
                             app.screen = AppScreen::Scanning;
                             app.init_scanner_statuses();
-                            event_rx =
-                                Some(start_scan_task(app.target.clone(), app.parallel_scanners()));
+                            event_rx = Some(start_scan_task(
+                                app.target.clone(),
+                                app.parallel_scanners(),
+                                app.scanner_args.clone(),
+                            ));
                         } else {
                             // Some tools missing, show install prompt
                             app.screen = AppScreen::ToolCheck;
@@ -126,8 +129,11 @@ async fn run_event_loop(
                             app.started_at = Some(chrono::Utc::now());
                             app.screen = AppScreen::Scanning;
                             app.init_scanner_statuses();
-                            event_rx =
-                                Some(start_scan_task(app.target.clone(), app.parallel_scanners()));
+                            event_rx = Some(start_scan_task(
+                                app.target.clone(),
+                                app.parallel_scanners(),
+                                app.scanner_args.clone(),
+                            ));
                         }
                         break;
                     }
@@ -518,17 +524,53 @@ async fn run_event_loop(
                             KeyCode::Enter => {
                                 let selected = app.get_selected_scanners();
                                 if !selected.is_empty() {
-                                    app.start_scan();
-                                    // Check tools before scanning
-                                    app.screen = AppScreen::ToolCheck;
-                                    app.progress_message =
-                                        "Checking installed tools...".to_string();
-                                    event_rx =
-                                        Some(start_tool_check(app.selected_scanners.clone()));
+                                    app.selected_scanners = selected;
+                                    app.scanner_args_input.clear();
+                                    app.scanner_args_cursor = 0;
+                                    app.screen = AppScreen::ScannerArgs;
                                 }
                             }
                             KeyCode::Esc => {
                                 app.screen = AppScreen::TargetInput;
+                            }
+                            _ => {}
+                        },
+
+                        AppScreen::ScannerArgs => match key.code {
+                            KeyCode::Char(c) => {
+                                app.scanner_args_input.push(c);
+                            }
+                            KeyCode::Backspace => {
+                                app.scanner_args_input.pop();
+                            }
+                            KeyCode::Enter => {
+                                // Parse any entered scanner args
+                                if !app.scanner_args_input.trim().is_empty() {
+                                    // Format: "nmap=-sV --script=vuln, nuclei=-tags cve"
+                                    let entries: Vec<String> = app
+                                        .scanner_args_input
+                                        .split(',')
+                                        .map(|s| s.trim().to_string())
+                                        .filter(|s| !s.is_empty())
+                                        .collect();
+                                    match scanners::parse_scanner_args(&entries) {
+                                        Ok(args) => {
+                                            app.scanner_args = args;
+                                        }
+                                        Err(e) => {
+                                            app.progress_message = format!("Invalid args: {}", e);
+                                            // Stay on this screen
+                                            continue;
+                                        }
+                                    }
+                                }
+                                app.start_scan();
+                                app.screen = AppScreen::ToolCheck;
+                                app.progress_message = "Checking installed tools...".to_string();
+                                event_rx = Some(start_tool_check(app.selected_scanners.clone()));
+                            }
+                            KeyCode::Esc => {
+                                app.screen = AppScreen::ScannerSelect;
                             }
                             _ => {}
                         },
@@ -567,6 +609,7 @@ async fn run_event_loop(
                                     event_rx = Some(start_scan_task(
                                         app.target.clone(),
                                         app.parallel_scanners(),
+                                        app.scanner_args.clone(),
                                     ));
                                 }
                             }
@@ -713,6 +756,7 @@ fn start_install_task(missing: Vec<scanners::ScannerType>) -> mpsc::Receiver<App
 fn start_scan_task(
     target: String,
     scanner_types: Vec<scanners::ScannerType>,
+    scanner_args: std::collections::HashMap<scanners::ScannerType, Vec<String>>,
 ) -> mpsc::Receiver<AppEvent> {
     let (tx, rx) = mpsc::channel(32);
 
@@ -722,13 +766,14 @@ fn start_scan_task(
         for scanner_type in scanner_types {
             let tx = tx.clone();
             let target = target.clone();
+            let extra_args = scanner_args.get(&scanner_type).cloned().unwrap_or_default();
 
             let handle = tokio::spawn(async move {
                 let _ = tx
                     .send(AppEvent::ScannerStarted(scanner_type.clone()))
                     .await;
 
-                match scanners::run_scanner(&scanner_type, &target).await {
+                match scanners::run_scanner(&scanner_type, &target, &extra_args).await {
                     Ok(result) => {
                         let _ = tx.send(AppEvent::ScanResult(result)).await;
                     }
@@ -851,7 +896,7 @@ fn start_wpscan_chain_task(target: String) -> mpsc::Receiver<AppEvent> {
     let (tx, rx) = mpsc::channel(32);
 
     tokio::spawn(async move {
-        match scanners::wpscan::run(&target).await {
+        match scanners::wpscan::run(&target, &[]).await {
             Ok(result) => {
                 let _ = tx.send(AppEvent::WpscanChainResult(result)).await;
             }

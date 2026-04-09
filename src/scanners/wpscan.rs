@@ -5,7 +5,7 @@ use tokio::process::Command;
 
 use super::{check_tool, Finding, ScanResult, ScannerType, Severity};
 
-pub async fn run(target: &str) -> Result<ScanResult> {
+pub async fn run(target: &str, extra_args: &[String]) -> Result<ScanResult> {
     let started_at = Utc::now();
 
     let wpscan_cmd = if cfg!(target_os = "windows") {
@@ -51,19 +51,22 @@ pub async fn run(target: &str) -> Result<ScanResult> {
         }
     }
 
+    cmd.args([
+        "--url",
+        target,
+        "--format",
+        "json",
+        "--no-banner",
+        "--random-user-agent",
+        "--enumerate",
+        "vp,vt,u1-20,dbe", // vulnerable plugins, themes, users, db exports
+        "--detection-mode",
+        "aggressive",
+    ]);
+    if !extra_args.is_empty() {
+        cmd.args(extra_args);
+    }
     let output = cmd
-        .args([
-            "--url",
-            target,
-            "--format",
-            "json",
-            "--no-banner",
-            "--random-user-agent",
-            "--enumerate",
-            "vp,vt,u1-20,dbe", // vulnerable plugins, themes, users, db exports
-            "--detection-mode",
-            "aggressive",
-        ])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
