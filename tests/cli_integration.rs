@@ -366,3 +366,54 @@ fn clap_no_subcommand_is_interactive_mode() {
     let cli = TestCli::try_parse_from(["octoscan"]).expect("no subcommand should be valid");
     assert!(cli.command.is_none());
 }
+
+// ─── --profile via binary ───────────────────────
+
+#[test]
+fn profile_flag_shown_in_help() {
+    octoscan()
+        .args(["scan", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--profile"));
+}
+
+#[test]
+fn profile_unknown_name_exits_with_error() {
+    octoscan()
+        .args(["scan", "-t", "http://example.com", "--profile", "notreal"])
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains("Unknown profile"));
+}
+
+#[test]
+fn profile_conflicts_with_scanners() {
+    octoscan()
+        .args([
+            "scan",
+            "-t",
+            "http://example.com",
+            "--profile",
+            "quick",
+            "-s",
+            "nmap",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("cannot be used with"));
+}
+
+#[test]
+fn profile_shows_available_on_error() {
+    octoscan()
+        .args(["scan", "-t", "http://example.com", "--profile", "invalid"])
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains("quick"))
+        .stderr(predicate::str::contains("web"))
+        .stderr(predicate::str::contains("recon"))
+        .stderr(predicate::str::contains("full"));
+}

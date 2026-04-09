@@ -498,11 +498,46 @@ async fn run_event_loop(
                             }
                             KeyCode::Enter => {
                                 if !app.target_input.is_empty() {
-                                    app.screen = AppScreen::ScannerSelect;
+                                    app.profile_cursor = 0;
+                                    app.screen = AppScreen::ProfileSelect;
                                 }
                             }
                             KeyCode::Esc => {
                                 app.screen = AppScreen::Home;
+                            }
+                            _ => {}
+                        },
+
+                        AppScreen::ProfileSelect => match key.code {
+                            KeyCode::Up | KeyCode::Char('k') => {
+                                if app.profile_cursor > 0 {
+                                    app.profile_cursor -= 1;
+                                }
+                            }
+                            KeyCode::Down | KeyCode::Char('j') => {
+                                let count = app.available_profiles.len() + 1; // +1 for "Custom"
+                                if app.profile_cursor < count - 1 {
+                                    app.profile_cursor += 1;
+                                }
+                            }
+                            KeyCode::Enter => {
+                                if app.profile_cursor < app.available_profiles.len() {
+                                    // Selected a profile — apply it and go to ScannerArgs
+                                    let profile =
+                                        app.available_profiles[app.profile_cursor].clone();
+                                    app.apply_profile(&profile);
+                                    app.selected_scanners = app.get_selected_scanners();
+                                    app.scanner_args_input.clear();
+                                    app.scanner_args_cursor = 0;
+                                    app.screen = AppScreen::ScannerArgs;
+                                } else {
+                                    // "Custom" option — go to scanner toggle screen
+                                    app.scanner_cursor = 0;
+                                    app.screen = AppScreen::ScannerSelect;
+                                }
+                            }
+                            KeyCode::Esc => {
+                                app.screen = AppScreen::TargetInput;
                             }
                             _ => {}
                         },
@@ -531,7 +566,7 @@ async fn run_event_loop(
                                 }
                             }
                             KeyCode::Esc => {
-                                app.screen = AppScreen::TargetInput;
+                                app.screen = AppScreen::ProfileSelect;
                             }
                             _ => {}
                         },

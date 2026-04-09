@@ -1,4 +1,5 @@
 use crate::installer::{InstallProgress, ToolStatus};
+use crate::profiles::Profile;
 use crate::scanners::{ScanResult, ScannerType};
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
@@ -8,6 +9,7 @@ use uuid::Uuid;
 pub enum AppScreen {
     Home,
     TargetInput,
+    ProfileSelect,
     ScannerSelect,
     ScannerArgs,
     ToolCheck,
@@ -66,6 +68,9 @@ pub struct App {
     pub scanner_args: HashMap<ScannerType, Vec<String>>,
     pub scanner_args_input: String,
     pub scanner_args_cursor: usize,
+    // Profile selection
+    pub available_profiles: Vec<Profile>,
+    pub profile_cursor: usize,
 }
 
 impl App {
@@ -100,6 +105,8 @@ impl App {
             scanner_args: HashMap::new(),
             scanner_args_input: String::new(),
             scanner_args_cursor: 0,
+            available_profiles: crate::profiles::all_profiles(),
+            profile_cursor: 0,
         }
     }
 
@@ -134,6 +141,8 @@ impl App {
             scanner_args: HashMap::new(),
             scanner_args_input: String::new(),
             scanner_args_cursor: 0,
+            available_profiles: crate::profiles::all_profiles(),
+            profile_cursor: 0,
         }
     }
 
@@ -163,6 +172,14 @@ impl App {
     pub fn toggle_scanner(&mut self, index: usize) {
         if index < self.scanner_toggles.len() {
             self.scanner_toggles[index] = !self.scanner_toggles[index];
+        }
+    }
+
+    /// Apply a profile by toggling the scanners it contains
+    pub fn apply_profile(&mut self, profile: &crate::profiles::Profile) {
+        let all = Self::all_scanner_types();
+        for (i, scanner) in all.iter().enumerate() {
+            self.scanner_toggles[i] = profile.scanners.contains(scanner);
         }
     }
 

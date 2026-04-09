@@ -32,5 +32,9 @@ pub enum Commands {
         /// Example: --scanner-args "nmap=-sV --script=vuln" --scanner-args "nuclei=-tags cve"
         #[arg(long = "scanner-args", value_name = "SCANNER=ARGS")]
         scanner_args: Vec<String>,
+
+        /// Use a predefined scan profile (quick, web, recon, full) instead of --scanners
+        #[arg(short = 'p', long, conflicts_with = "scanners")]
+        profile: Option<String>,
     },
 }

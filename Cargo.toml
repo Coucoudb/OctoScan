@@ -1,6 +1,6 @@
 [package]
 name = "octoscan"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 description = "CLI security auditing tool orchestrating Nmap, Nuclei, ZAP and more"
 license = "MIT"
@@ -19,6 +19,10 @@ clap = { version = "4", features = ["derive"] }
 # Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+toml = "0.8"
+
+# Filesystem
+dirs = "6"
 
 # Date/time
 chrono = { version = "0.4", features = ["serde"] }

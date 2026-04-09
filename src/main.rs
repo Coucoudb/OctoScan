@@ -3,6 +3,7 @@ mod cli;
 mod export;
 mod installer;
 mod logger;
+mod profiles;
 mod scanners;
 mod tui;
 mod ui;
@@ -22,9 +23,28 @@ async fn main() -> Result<()> {
             scanners: scanner_list,
             output,
             scanner_args,
+            profile,
         }) => {
-            let selected: Vec<scanners::ScannerType> =
-                scanner_list.iter().filter_map(|s| s.parse().ok()).collect();
+            // Resolve scanners from --profile or --scanners
+            let selected: Vec<scanners::ScannerType> = if let Some(profile_name) = profile {
+                match profiles::find_profile(&profile_name) {
+                    Some(p) => p.scanners,
+                    None => {
+                        let available: Vec<String> = profiles::all_profiles()
+                            .iter()
+                            .map(|p| p.name.clone())
+                            .collect();
+                        eprintln!(
+                            "Unknown profile: '{}'. Available: {}",
+                            profile_name,
+                            available.join(", ")
+                        );
+                        std::process::exit(1);
+                    }
+                }
+            } else {
+                scanner_list.iter().filter_map(|s| s.parse().ok()).collect()
+            };
 
             if selected.is_empty() {
                 eprintln!("No valid scanners specified. Available: nmap, nuclei, zap");
