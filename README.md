@@ -136,6 +136,7 @@ GitHub Actions runs on every push/PR to `main`:
 - **Lint** — `cargo fmt --check` + `cargo clippy -D warnings`
 - **Audit** — `cargo audit` for dependency vulnerabilities
 - **SAST** — Semgrep static analysis with SARIF upload
+- **Test** — `cargo test` to validate all scanner parsers and edge cases
 - **Build** — Release build on Linux, Windows, and macOS
 
 ## ⚠️ Legal Disclaimer

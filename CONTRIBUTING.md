@@ -164,6 +164,7 @@ GitHub Actions runs automatically on every push and pull request to `main` and `
 | **Lint**  | `cargo clippy`    | Catches common mistakes and enforces idioms     |
 | **Audit** | `cargo audit`     | Detects known vulnerabilities in dependencies   |
 | **SAST**  | Semgrep           | Static analysis for security issues (SARIF)     |
+| **Test**  | `cargo test`      | Validates all scanner parsers and edge cases     |
 | **Build** | `cargo build`     | Release build on Linux, Windows, and macOS      |
 | **Changelog** | `git-cliff`   | Auto-generates release notes from Conventional Commits |
 
@@ -240,9 +241,10 @@ If you want to add a new security tool, follow the existing scanner module patte
 1. Create `src/scanners/<tool_name>.rs` with an async `run(target: &str) -> Result<ScanResult>` function.
 2. Implement tool availability check via `check_tool()`.
 3. Parse tool output into `Finding` structs with appropriate `Severity` levels.
-4. Register the scanner in `src/scanners/mod.rs` by adding a variant to `ScannerType` and updating `run_scanner()`.
-5. Add installation logic in `src/installer.rs` for all three platforms (Windows, macOS, Linux).
-6. Update `README.md` with the new tool in the prerequisites table.
+4. Add a `#[cfg(test)]` module with at least 3 tests for the parser (normal output, empty output, edge case). Place sample tool output files in `tests/fixtures/<tool_name>/`.
+5. Register the scanner in `src/scanners/mod.rs` by adding a variant to `ScannerType` and updating `run_scanner()`.
+6. Add installation logic in `src/installer.rs` for all three platforms (Windows, macOS, Linux).
+7. Update `README.md` with the new tool in the prerequisites table.
 
 ---
 
