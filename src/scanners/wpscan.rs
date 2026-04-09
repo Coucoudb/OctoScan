@@ -286,7 +286,10 @@ mod tests {
         assert!(findings.len() >= 4);
         assert!(findings[0].title.contains("WordPress 6.4.2"));
         assert!(matches!(findings[0].severity, Severity::Info)); // latest
-        let user_findings: Vec<_> = findings.iter().filter(|f| f.title.starts_with("User:")).collect();
+        let user_findings: Vec<_> = findings
+            .iter()
+            .filter(|f| f.title.starts_with("User:"))
+            .collect();
         assert_eq!(user_findings.len(), 2);
     }
 
@@ -302,9 +305,14 @@ mod tests {
         let input = include_str!("../../tests/fixtures/wpscan/vulnerable.json");
         let findings = parse_wpscan_output(input);
         // Should find: WP version (outdated), RCE vuln, theme + XSS vuln, plugin + LFI + SQLi vulns, user
-        let vuln_count = findings.iter().filter(|f| !matches!(f.severity, Severity::Info) && !matches!(f.severity, Severity::Low)).count();
+        let vuln_count = findings
+            .iter()
+            .filter(|f| {
+                !matches!(f.severity, Severity::Info) && !matches!(f.severity, Severity::Low)
+            })
+            .count();
         assert!(vuln_count >= 3); // RCE (Critical), XSS (Medium), LFI (Medium), SQLi (High)
-        // WordPress should be marked as outdated (Medium)
+                                  // WordPress should be marked as outdated (Medium)
         assert!(matches!(findings[0].severity, Severity::Medium));
         assert!(findings[0].title.contains("5.2.1"));
     }

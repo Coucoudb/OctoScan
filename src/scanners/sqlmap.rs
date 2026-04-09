@@ -190,8 +190,14 @@ mod tests {
         let input = include_str!("../../tests/fixtures/sqlmap/normal.txt");
         let findings = parse_sqlmap_output(input);
         // Should find: 2 injection types + 1 DBMS identification
-        let sqli_findings: Vec<_> = findings.iter().filter(|f| f.title.starts_with("SQL Injection")).collect();
-        let dbms_findings: Vec<_> = findings.iter().filter(|f| f.title == "Database Identified").collect();
+        let sqli_findings: Vec<_> = findings
+            .iter()
+            .filter(|f| f.title.starts_with("SQL Injection"))
+            .collect();
+        let dbms_findings: Vec<_> = findings
+            .iter()
+            .filter(|f| f.title == "Database Identified")
+            .collect();
         assert_eq!(sqli_findings.len(), 2);
         assert_eq!(dbms_findings.len(), 1);
         assert!(sqli_findings[0].title.contains("boolean-based blind"));
@@ -210,10 +216,16 @@ mod tests {
         let input = include_str!("../../tests/fixtures/sqlmap/union_and_dump.txt");
         let findings = parse_sqlmap_output(input);
         // UNION and stacked queries should be Critical severity
-        let critical_findings: Vec<_> = findings.iter().filter(|f| matches!(f.severity, Severity::Critical)).collect();
+        let critical_findings: Vec<_> = findings
+            .iter()
+            .filter(|f| matches!(f.severity, Severity::Critical))
+            .collect();
         assert!(critical_findings.len() >= 2); // UNION sqli + stacked sqli + data extracted
-        // Should detect data dump
-        let dump_findings: Vec<_> = findings.iter().filter(|f| f.title == "Data Extracted").collect();
+                                               // Should detect data dump
+        let dump_findings: Vec<_> = findings
+            .iter()
+            .filter(|f| f.title == "Data Extracted")
+            .collect();
         assert!(!dump_findings.is_empty());
     }
 

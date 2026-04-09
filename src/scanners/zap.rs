@@ -349,8 +349,14 @@ mod tests {
         let input = include_str!("../../tests/fixtures/zap/text.txt");
         let findings = parse_zap_output(input);
         // WARN-NEW and FAIL-NEW lines should produce findings
-        let warn_findings: Vec<_> = findings.iter().filter(|f| matches!(f.severity, Severity::Medium)).collect();
-        let fail_findings: Vec<_> = findings.iter().filter(|f| matches!(f.severity, Severity::High)).collect();
+        let warn_findings: Vec<_> = findings
+            .iter()
+            .filter(|f| matches!(f.severity, Severity::Medium))
+            .collect();
+        let fail_findings: Vec<_> = findings
+            .iter()
+            .filter(|f| matches!(f.severity, Severity::High))
+            .collect();
         assert!(!warn_findings.is_empty());
         assert!(!fail_findings.is_empty());
     }

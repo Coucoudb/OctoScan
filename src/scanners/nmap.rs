@@ -147,8 +147,14 @@ mod tests {
         let input = include_str!("../../tests/fixtures/nmap/vuln.txt");
         let findings = parse_nmap_output(input);
         // Should find open ports + vulnerability markers
-        let port_findings: Vec<_> = findings.iter().filter(|f| f.title.starts_with("Open port")).collect();
-        let vuln_findings: Vec<_> = findings.iter().filter(|f| f.title == "NSE Vulnerability Detected").collect();
+        let port_findings: Vec<_> = findings
+            .iter()
+            .filter(|f| f.title.starts_with("Open port"))
+            .collect();
+        let vuln_findings: Vec<_> = findings
+            .iter()
+            .filter(|f| f.title == "NSE Vulnerability Detected")
+            .collect();
         assert_eq!(port_findings.len(), 3);
         assert!(!vuln_findings.is_empty());
         assert!(matches!(vuln_findings[0].severity, Severity::High));

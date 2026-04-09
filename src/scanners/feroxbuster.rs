@@ -233,7 +233,9 @@ mod tests {
 
     #[test]
     fn is_garbage_url_detection() {
-        assert!(is_garbage_url("http://example.com/%EF%BF%BD%EF%BF%BD%EF%BF%BD"));
+        assert!(is_garbage_url(
+            "http://example.com/%EF%BF%BD%EF%BF%BD%EF%BF%BD"
+        ));
         assert!(!is_garbage_url("http://example.com/normal-path"));
     }
 }
