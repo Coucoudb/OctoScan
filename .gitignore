@@ -16,6 +16,6 @@ Cargo.lock
 Thumbs.db
 
 # OctoScan reports
-*.json
+# *.json
 # *.txt
 !README.md
