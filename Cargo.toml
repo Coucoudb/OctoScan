@@ -34,3 +34,7 @@ uuid = { version = "1", features = ["v4"] }
 
 # Secure temp files
 tempfile = "3"
+
+[dev-dependencies]
+assert_cmd = "2"
+predicates = "3"
