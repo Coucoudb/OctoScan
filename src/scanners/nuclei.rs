@@ -122,7 +122,11 @@ fn parse_nuclei_output(output: &str) -> Vec<Finding> {
                 title: name,
                 severity,
                 description,
-                details: format!("Template: {} | Matched: {}", template_id, matched_at),
+                details: if matched_at.is_empty() {
+                    format!("Template: {}", template_id)
+                } else {
+                    format!("{} | Template: {}", matched_at, template_id)
+                },
             });
         }
     }
@@ -141,8 +145,14 @@ mod tests {
         assert_eq!(findings.len(), 3);
         assert_eq!(findings[0].title, "Apache Log4j RCE");
         assert!(matches!(findings[0].severity, Severity::Critical));
+        // Endpoint URL should be first in details
+        assert!(findings[0]
+            .details
+            .starts_with("http://example.com:8080/api"));
+        assert!(findings[0].details.contains("cve-2021-44228"));
         assert_eq!(findings[1].title, "Admin Panel Exposed");
         assert!(matches!(findings[1].severity, Severity::Medium));
+        assert!(findings[1].details.starts_with("http://example.com/admin"));
         assert_eq!(findings[2].title, "Missing HSTS Header");
         assert!(matches!(findings[2].severity, Severity::Low));
     }

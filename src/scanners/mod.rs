@@ -252,7 +252,20 @@ pub fn extract_sqli_targets(results: &[ScanResult]) -> Vec<String> {
                 .iter()
                 .any(|kw| title_lower.contains(kw) || desc_lower.contains(kw))
             {
-                // Extract URL from details field (where scanners typically store matched-at / endpoint)
+                // Try to extract instance URIs from ZAP's "URIs: url1 url2" in details
+                if let Some(uris_pos) = finding.details.find("URIs: ") {
+                    let uris_str = &finding.details[uris_pos + 6..];
+                    // URIs end at the next newline or end of string
+                    let uris_line = uris_str.lines().next().unwrap_or(uris_str);
+                    for uri in uris_line.split_whitespace() {
+                        if uri.starts_with("http") && !targets.contains(&uri.to_string()) {
+                            targets.push(uri.to_string());
+                        }
+                    }
+                    continue;
+                }
+
+                // Fallback: extract URL from details field start
                 let url = if finding.details.starts_with("http") {
                     finding
                         .details

@@ -10,6 +10,10 @@
 <solution>&lt;p&gt;Validate and encode all user input.&lt;/p&gt;</solution>
 <cweid>79</cweid>
 <count>2</count>
+<instances>
+<instance><uri>http://example.com/search?q=test</uri><method>GET</method><param>q</param></instance>
+<instance><uri>http://example.com/comment?body=hello</uri><method>GET</method><param>body</param></instance>
+</instances>
 </alertitem>
 <alertitem>
 <name>Cookie Without Secure Flag</name>

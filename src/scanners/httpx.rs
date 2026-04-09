@@ -122,7 +122,7 @@ fn parse_httpx_output(output: &str) -> Vec<Finding> {
                     tech_str
                 ),
                 details: format!(
-                    "URL: {} | Status: {} | Title: {} | Tech: {}",
+                    "{} | Status: {} | Title: {} | Tech: {}",
                     url, status_code, title, tech_str
                 ),
             });
