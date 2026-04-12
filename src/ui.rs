@@ -40,7 +40,9 @@ pub fn draw(f: &mut Frame, app: &App) {
     match app.screen {
         AppScreen::Home => draw_home(f, chunks[1]),
         AppScreen::TargetInput => draw_target_input(f, chunks[1], app),
+        AppScreen::ProfileSelect => draw_profile_select(f, chunks[1], app),
         AppScreen::ScannerSelect => draw_scanner_select(f, chunks[1], app),
+        AppScreen::ScannerArgs => draw_scanner_args(f, chunks[1], app),
         AppScreen::ToolCheck => draw_tool_check(f, chunks[1], app),
         AppScreen::Installing => draw_installing(f, chunks[1], app),
         AppScreen::Scanning => draw_scanning(f, chunks[1], app),
@@ -102,7 +104,9 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
     let help_text = match app.screen {
         AppScreen::Home => "s: Start scan │ h: Help │ q: Quit",
         AppScreen::TargetInput => "Enter: Confirm │ Esc: Back",
-        AppScreen::ScannerSelect => "↑/↓: Navigate │ Space: Toggle │ Enter: Start │ Esc: Back",
+        AppScreen::ProfileSelect => "↑/↓: Navigate │ Enter: Select │ Esc: Back",
+        AppScreen::ScannerSelect => "↑/↓: Navigate │ Space: Toggle │ Enter: Next │ Esc: Back",
+        AppScreen::ScannerArgs => "Enter: Start scan │ Esc: Back (leave empty to skip)",
         AppScreen::ToolCheck => "i: Install missing │ s: Skip & scan available │ q: Quit",
         AppScreen::Installing => "Installing... │ ↑/↓: Scroll │ q: Cancel",
         AppScreen::Scanning => "Scanning in progress... │ q: Cancel",
@@ -220,6 +224,94 @@ fn draw_target_input(f: &mut Frame, area: Rect, app: &App) {
     f.render_widget(input, chunks[1]);
 }
 
+fn draw_profile_select(f: &mut Frame, area: Rect, app: &App) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Min(8),
+            Constraint::Length(3),
+        ])
+        .split(area);
+
+    let title = Paragraph::new(format!(" Select a scan profile for: {}", app.target_input))
+        .style(Style::default().fg(Color::White));
+    f.render_widget(title, chunks[0]);
+
+    let mut items: Vec<ListItem> = Vec::new();
+
+    // Built-in + user profiles
+    for (i, profile) in app.available_profiles.iter().enumerate() {
+        let style = if app.profile_cursor == i {
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::White)
+        };
+        let prefix = if app.profile_cursor == i {
+            "▸ "
+        } else {
+            "  "
+        };
+
+        let scanner_names: Vec<String> = profile.scanners.iter().map(|s| s.to_string()).collect();
+        items.push(
+            ListItem::new(Line::from(vec![
+                Span::styled(
+                    format!("{}[{}]", prefix, profile.name),
+                    style.add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    format!("  {} — {}", profile.description, scanner_names.join(", ")),
+                    Style::default().fg(Color::DarkGray),
+                ),
+            ]))
+            .style(style),
+        );
+    }
+
+    // "Custom" option (last)
+    let custom_idx = app.available_profiles.len();
+    let style = if app.profile_cursor == custom_idx {
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::White)
+    };
+    let prefix = if app.profile_cursor == custom_idx {
+        "▸ "
+    } else {
+        "  "
+    };
+    items.push(
+        ListItem::new(Line::from(vec![
+            Span::styled(
+                format!("{}[custom]", prefix),
+                style.add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                "  Pick individual scanners".to_string(),
+                Style::default().fg(Color::DarkGray),
+            ),
+        ]))
+        .style(style),
+    );
+
+    let list = List::new(items).block(
+        Block::default()
+            .title(" Profiles ")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Cyan)),
+    );
+    f.render_widget(list, chunks[1]);
+
+    let hint = Paragraph::new(" Select a profile or choose [custom] to pick scanners manually")
+        .style(Style::default().fg(Color::DarkGray));
+    f.render_widget(hint, chunks[2]);
+}
+
 fn draw_scanner_select(f: &mut Frame, area: Rect, app: &App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -314,6 +406,45 @@ fn draw_scanner_select(f: &mut Frame, area: Rect, app: &App) {
     ))
     .style(Style::default().fg(Color::DarkGray));
     f.render_widget(hint, chunks[2]);
+}
+
+fn draw_scanner_args(f: &mut Frame, area: Rect, app: &App) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Length(5),
+            Constraint::Length(5),
+            Constraint::Min(0),
+        ])
+        .split(area);
+
+    let title = Paragraph::new(" Custom scanner arguments (optional):")
+        .style(Style::default().fg(Color::White));
+    f.render_widget(title, chunks[0]);
+
+    let input_display = format!(" > {}_", app.scanner_args_input);
+    let input = Paragraph::new(input_display)
+        .style(Style::default().fg(Color::Cyan))
+        .block(
+            Block::default()
+                .title(" Scanner Args ")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Cyan)),
+        );
+    f.render_widget(input, chunks[1]);
+
+    let example = Paragraph::new(
+        " Format: scanner=args, scanner=args\n Example: nmap=--script vuln, nuclei=-tags cve",
+    )
+    .style(Style::default().fg(Color::DarkGray))
+    .block(
+        Block::default()
+            .title(" Help ")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::DarkGray)),
+    );
+    f.render_widget(example, chunks[2]);
 }
 
 fn draw_scanning(f: &mut Frame, area: Rect, app: &App) {

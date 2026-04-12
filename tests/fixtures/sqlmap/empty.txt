@@ -1,0 +1,7 @@
+[*] starting at 10:00:00
+
+[10:00:01] [INFO] testing connection to the target URL
+[10:00:02] [WARNING] GET parameter 'id' does not seem to be injectable
+[10:00:03] [CRITICAL] all tested parameters do not appear to be injectable
+
+[*] shutting down at 10:00:04

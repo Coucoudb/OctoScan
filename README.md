@@ -18,6 +18,7 @@ OctoScan is a CLI wrapper that orchestrates popular security tools (Nmap, Nuclei
 ## Features
 
 - **Interactive TUI** — Navigate menus, select scanners, and browse results with keyboard shortcuts
+- **Scan profiles** — Built-in profiles (quick, web, recon, full) and user-defined profiles via config file
 - **Multi-scanner orchestration** — Run Nmap, Nuclei, ZAP, Feroxbuster, SQLMap, Subfinder, httpx, WPScan, and Hydra from a single interface
 - **Parallel execution** — All selected scanners run simultaneously with live status indicators
 - **Smart pipelines** — Automated chaining between scanners:
@@ -91,6 +92,12 @@ Launch the TUI and navigate with keyboard shortcuts:
 # Scan with specific scanners
 octoscan scan -t https://example.com -s nmap,nuclei
 
+# Use a scan profile instead
+octoscan scan -t https://example.com --profile quick    # Nmap only
+octoscan scan -t https://example.com --profile web      # Nmap, Nuclei, Feroxbuster, ZAP
+octoscan scan -t https://example.com --profile recon    # Subfinder, httpx, Nmap
+octoscan scan -t https://example.com --profile full     # All scanners
+
 # Subdomain enum + HTTP probing
 octoscan scan -t example.com -s subfinder,httpx
 
@@ -102,7 +109,62 @@ octoscan scan -t 192.168.1.1 -s nmap,hydra
 
 # Full scan with all scanners
 octoscan scan -t https://example.com -s nmap,nuclei,zap,feroxbuster,sqlmap,hydra -o report.json
+
+# Custom scanner arguments
+octoscan scan -t https://example.com -s nmap,nuclei \
+  --scanner-args "nmap=--script vuln --top-ports 100" \
+  --scanner-args "nuclei=-tags cve -severity critical"
 ```
+
+### Custom scanner arguments
+
+Use `--scanner-args` to pass extra flags to individual scanners. The format is `scanner=args` and can be repeated:
+
+```bash
+--scanner-args "nmap=-sV --script=http-enum"
+--scanner-args "nuclei=-tags cve,xss -t /path/to/templates"
+--scanner-args "feroxbuster=-w /path/to/wordlist.txt -d 3"
+--scanner-args "zap=-quickprogress"
+```
+
+Custom arguments are **appended** to the scanner's default flags. Shell metacharacters (`;`, `|`, `&`, `` ` ``, `$`, etc.) are rejected to prevent command injection.
+
+In **TUI mode**, a scanner arguments input screen appears after selecting scanners. Enter args in the format `scanner=args, scanner=args` or press Enter to skip.
+
+### Scan profiles
+
+Built-in profiles let you quickly select common scanner combinations:
+
+| Profile | Scanners | Use case |
+|---------|----------|----------|
+| `quick` | Nmap | Fast port scan |
+| `web` | Nmap, Nuclei, Feroxbuster, ZAP | Web application audit |
+| `recon` | Subfinder, httpx, Nmap | Reconnaissance |
+| `full` | All 9 scanners | Comprehensive scan |
+
+**CLI:** Use `--profile` instead of `--scanners`:
+
+```bash
+octoscan scan -t https://example.com --profile web
+```
+
+**TUI:** After entering the target, a profile selection screen lets you pick a built-in profile or choose "Custom" to manually toggle individual scanners.
+
+#### User-defined profiles
+
+Create a config file at `~/.config/octoscan/config.toml` (Linux/macOS) or `%APPDATA%\octoscan\config.toml` (Windows):
+
+```toml
+[profiles.stealthy]
+description = "Low-noise scan"
+scanners = ["nmap", "subfinder"]
+
+[profiles.wordpress]
+description = "WordPress-focused audit"
+scanners = ["nmap", "nuclei", "wpscan", "feroxbuster"]
+```
+
+User profiles appear alongside built-in profiles in both CLI (`--profile stealthy`) and TUI. A user profile with the same name as a built-in profile overrides it.
 
 ## Project Structure
 
@@ -111,6 +173,7 @@ src/
 ├── main.rs           # Entry point, CLI dispatch
 ├── cli.rs            # Clap argument definitions
 ├── app.rs            # Application state
+├── profiles.rs       # Scan profiles (built-in + user config)
 ├── tui.rs            # Terminal event loop
 ├── ui.rs             # Ratatui UI rendering
 ├── export.rs         # JSON/TXT export
@@ -136,6 +199,7 @@ GitHub Actions runs on every push/PR to `main`:
 - **Lint** — `cargo fmt --check` + `cargo clippy -D warnings`
 - **Audit** — `cargo audit` for dependency vulnerabilities
 - **SAST** — Semgrep static analysis with SARIF upload
+- **Test** — `cargo test` to validate all scanner parsers and edge cases
 - **Build** — Release build on Linux, Windows, and macOS
 
 ## ⚠️ Legal Disclaimer

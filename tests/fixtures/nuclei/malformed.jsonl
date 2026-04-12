@@ -1,0 +1,4 @@
+{"template-id":"valid-template","info":{"name":"Valid Finding","severity":"high","description":"A valid finding."},"matched-at":"http://example.com/vuln"}
+this is not valid json at all
+{"broken json": [}
+{"template-id":"another-valid","info":{"name":"Second Valid","severity":"low","description":"Another valid one."},"matched-at":"http://example.com/other"}

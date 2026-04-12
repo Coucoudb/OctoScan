@@ -1,0 +1,55 @@
+{
+  "version": {
+    "number": "5.2.1",
+    "status": "outdated",
+    "vulnerabilities": [
+      {
+        "title": "WordPress 5.2.1 - RCE via Theme Upload",
+        "vuln_type": "rce",
+        "references": {
+          "url": ["https://example.com/advisory/1"]
+        }
+      }
+    ]
+  },
+  "main_theme": {
+    "slug": "flavor",
+    "version": "1.0",
+    "outdated": true,
+    "vulnerabilities": [
+      {
+        "title": "Flavor Theme XSS",
+        "vuln_type": "xss",
+        "references": {
+          "url": ["https://example.com/advisory/2"]
+        }
+      }
+    ]
+  },
+  "plugins": {
+    "revslider": {
+      "slug": "revslider",
+      "version": "4.1.4",
+      "outdated": true,
+      "vulnerabilities": [
+        {
+          "title": "Slider Revolution LFI",
+          "vuln_type": "lfi",
+          "references": {
+            "url": ["https://example.com/advisory/3"]
+          }
+        },
+        {
+          "title": "Slider Revolution SQLi",
+          "vuln_type": "sqli",
+          "references": {
+            "url": []
+          }
+        }
+      ]
+    }
+  },
+  "users": {
+    "admin": {}
+  }
+}

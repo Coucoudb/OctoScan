@@ -1,0 +1,2 @@
+{"url":"https://example.com","status_code":200,"title":"Example Domain","tech":["Nginx","PHP"],"content_length":1256}
+{"url":"https://api.example.com","status_code":200,"title":"API","tech":[],"content_length":45}

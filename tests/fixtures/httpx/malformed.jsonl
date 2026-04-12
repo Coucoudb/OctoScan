@@ -1,0 +1,3 @@
+{"url":"https://valid.example.com","status_code":200,"title":"Valid","tech":["Apache"],"content_length":500}
+not json at all
+{"url":"https://also-valid.example.com","status_code":301,"title":"","tech":null,"content_length":0}

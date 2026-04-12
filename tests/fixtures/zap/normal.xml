@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OWASPZAPReport version="2.14.0" generated="2024-01-15">
+<site name="http://example.com" host="example.com" port="80" ssl="false">
+<alerts>
+<alertitem>
+<name>Cross-Site Scripting (Reflected)</name>
+<riskcode>3</riskcode>
+<riskdesc>High (Medium)</riskdesc>
+<desc>&lt;p&gt;Cross-site scripting vulnerability found.&lt;/p&gt;</desc>
+<solution>&lt;p&gt;Validate and encode all user input.&lt;/p&gt;</solution>
+<cweid>79</cweid>
+<count>2</count>
+<instances>
+<instance><uri>http://example.com/search?q=test</uri><method>GET</method><param>q</param></instance>
+<instance><uri>http://example.com/comment?body=hello</uri><method>GET</method><param>body</param></instance>
+</instances>
+</alertitem>
+<alertitem>
+<name>Cookie Without Secure Flag</name>
+<riskcode>1</riskcode>
+<riskdesc>Low (Medium)</riskdesc>
+<desc>A cookie was set without the secure flag.</desc>
+<solution>Set the secure flag on all cookies.</solution>
+<cweid>614</cweid>
+<count>1</count>
+</alertitem>
+</alerts>
+</site>
+</OWASPZAPReport>

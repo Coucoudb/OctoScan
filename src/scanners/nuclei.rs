@@ -5,7 +5,7 @@ use tokio::process::Command;
 
 use super::{check_tool, Finding, ScanResult, ScannerType, Severity};
 
-pub async fn run(target: &str) -> Result<ScanResult> {
+pub async fn run(target: &str, extra_args: &[String]) -> Result<ScanResult> {
     let started_at = Utc::now();
 
     if !check_tool("nuclei").await {
@@ -22,26 +22,30 @@ pub async fn run(target: &str) -> Result<ScanResult> {
         });
     }
 
-    let output = Command::new("nuclei")
-        .args([
-            "-u",
-            target,
-            "-jsonl",
-            "-silent",
-            "-as", // auto-update templates
-            "-severity",
-            "critical,high,medium,low", // skip info-only noise
-            "-c",
-            "50", // concurrency (templates)
-            "-rl",
-            "150", // rate limit (req/s)
-            "-timeout",
-            "10", // per-request timeout
-            "-retries",
-            "2", // retry on transient errors
-            "-tags",
-            "cve,exposure,misconfig,default-login,xss,sqli,rce,lfi,ssrf",
-        ])
+    let mut cmd = Command::new("nuclei");
+    cmd.args([
+        "-u",
+        target,
+        "-jsonl",
+        "-silent",
+        "-as", // auto-update templates
+        "-severity",
+        "critical,high,medium,low", // skip info-only noise
+        "-c",
+        "50", // concurrency (templates)
+        "-rl",
+        "150", // rate limit (req/s)
+        "-timeout",
+        "10", // per-request timeout
+        "-retries",
+        "2", // retry on transient errors
+        "-tags",
+        "cve,exposure,misconfig,default-login,xss,sqli,rce,lfi,ssrf",
+    ]);
+    if !extra_args.is_empty() {
+        cmd.args(extra_args);
+    }
+    let output = cmd
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
@@ -118,10 +122,61 @@ fn parse_nuclei_output(output: &str) -> Vec<Finding> {
                 title: name,
                 severity,
                 description,
-                details: format!("Template: {} | Matched: {}", template_id, matched_at),
+                details: if matched_at.is_empty() {
+                    format!("Template: {}", template_id)
+                } else {
+                    format!("{} | Template: {}", matched_at, template_id)
+                },
             });
         }
     }
 
     findings
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_normal_output() {
+        let input = include_str!("../../tests/fixtures/nuclei/normal.jsonl");
+        let findings = parse_nuclei_output(input);
+        assert_eq!(findings.len(), 3);
+        assert_eq!(findings[0].title, "Apache Log4j RCE");
+        assert!(matches!(findings[0].severity, Severity::Critical));
+        // Endpoint URL should be first in details
+        assert!(findings[0]
+            .details
+            .starts_with("http://example.com:8080/api"));
+        assert!(findings[0].details.contains("cve-2021-44228"));
+        assert_eq!(findings[1].title, "Admin Panel Exposed");
+        assert!(matches!(findings[1].severity, Severity::Medium));
+        assert!(findings[1].details.starts_with("http://example.com/admin"));
+        assert_eq!(findings[2].title, "Missing HSTS Header");
+        assert!(matches!(findings[2].severity, Severity::Low));
+    }
+
+    #[test]
+    fn parse_empty_output() {
+        let input = include_str!("../../tests/fixtures/nuclei/empty.jsonl");
+        let findings = parse_nuclei_output(input);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn parse_malformed_output_skips_bad_lines() {
+        let input = include_str!("../../tests/fixtures/nuclei/malformed.jsonl");
+        let findings = parse_nuclei_output(input);
+        // Only valid JSON lines produce findings
+        assert_eq!(findings.len(), 2);
+        assert_eq!(findings[0].title, "Valid Finding");
+        assert_eq!(findings[1].title, "Second Valid");
+    }
+
+    #[test]
+    fn parse_completely_empty_string() {
+        let findings = parse_nuclei_output("");
+        assert!(findings.is_empty());
+    }
 }

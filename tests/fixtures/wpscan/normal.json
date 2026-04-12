@@ -1,0 +1,25 @@
+{
+  "version": {
+    "number": "6.4.2",
+    "status": "latest",
+    "vulnerabilities": []
+  },
+  "main_theme": {
+    "slug": "twentytwentyfour",
+    "version": "1.0",
+    "outdated": false,
+    "vulnerabilities": []
+  },
+  "plugins": {
+    "contact-form-7": {
+      "slug": "contact-form-7",
+      "version": "5.8",
+      "outdated": false,
+      "vulnerabilities": []
+    }
+  },
+  "users": {
+    "admin": {},
+    "editor": {}
+  }
+}

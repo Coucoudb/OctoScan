@@ -1,0 +1,4 @@
+WARN-NEW: Cookie Without Secure Flag [10011] x3 http://example.com/login
+FAIL-NEW: SQL Injection [40018] x1 http://example.com/search?q=test
+PASS: X-Content-Type-Options [10021]
+WARN-NEW: X-Frame-Options Header Not Set [10020] x5 http://example.com

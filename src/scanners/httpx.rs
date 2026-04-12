@@ -6,7 +6,7 @@ use tokio::process::Command;
 
 use super::{check_tool, Finding, ScanResult, ScannerType, Severity};
 
-pub async fn run(target: &str) -> Result<ScanResult> {
+pub async fn run(target: &str, extra_args: &[String]) -> Result<ScanResult> {
     let started_at = Utc::now();
 
     if !check_tool("httpx").await {
@@ -23,27 +23,31 @@ pub async fn run(target: &str) -> Result<ScanResult> {
         });
     }
 
-    let output = Command::new("httpx")
-        .args([
-            "-u",
-            target,
-            "-silent",
-            "-json",
-            "-status-code",
-            "-title",
-            "-tech-detect",
-            "-follow-redirects",
-            "-threads",
-            "50", // concurrency
-            "-timeout",
-            "10",              // per-request timeout
-            "-cdn",            // detect CDN usage
-            "-ip",             // extract IP addresses
-            "-cname",          // extract CNAME records
-            "-content-length", // show response size
-            "-web-server",     // detect web server
-            "-location",       // show redirect location
-        ])
+    let mut cmd = Command::new("httpx");
+    cmd.args([
+        "-u",
+        target,
+        "-silent",
+        "-json",
+        "-status-code",
+        "-title",
+        "-tech-detect",
+        "-follow-redirects",
+        "-threads",
+        "50", // concurrency
+        "-timeout",
+        "10",              // per-request timeout
+        "-cdn",            // detect CDN usage
+        "-ip",             // extract IP addresses
+        "-cname",          // extract CNAME records
+        "-content-length", // show response size
+        "-web-server",     // detect web server
+        "-location",       // show redirect location
+    ]);
+    if !extra_args.is_empty() {
+        cmd.args(extra_args);
+    }
+    let output = cmd
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
@@ -118,7 +122,7 @@ fn parse_httpx_output(output: &str) -> Vec<Finding> {
                     tech_str
                 ),
                 details: format!(
-                    "URL: {} | Status: {} | Title: {} | Tech: {}",
+                    "{} | Status: {} | Title: {} | Tech: {}",
                     url, status_code, title, tech_str
                 ),
             });
@@ -213,4 +217,43 @@ pub async fn run_list(targets: &[String]) -> Result<ScanResult> {
         success: true,
         error: None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_normal_output() {
+        let input = include_str!("../../tests/fixtures/httpx/normal.jsonl");
+        let findings = parse_httpx_output(input);
+        assert_eq!(findings.len(), 2);
+        assert!(findings[0].title.contains("https://example.com"));
+        assert!(findings[0].title.contains("200"));
+        assert!(findings[0].description.contains("Nginx, PHP"));
+        assert!(findings[1].description.contains("None detected"));
+    }
+
+    #[test]
+    fn parse_empty_output() {
+        let input = include_str!("../../tests/fixtures/httpx/empty.jsonl");
+        let findings = parse_httpx_output(input);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn parse_malformed_output_skips_bad_lines() {
+        let input = include_str!("../../tests/fixtures/httpx/malformed.jsonl");
+        let findings = parse_httpx_output(input);
+        // Only valid JSON lines produce findings
+        assert_eq!(findings.len(), 2);
+        assert!(findings[0].title.contains("valid.example.com"));
+        assert!(findings[1].title.contains("also-valid.example.com"));
+    }
+
+    #[test]
+    fn parse_completely_empty_string() {
+        let findings = parse_httpx_output("");
+        assert!(findings.is_empty());
+    }
 }

@@ -11,9 +11,10 @@ pub mod zap;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::str::FromStr;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ScannerType {
     Nmap,
     Nuclei,
@@ -102,16 +103,20 @@ pub struct ScanResult {
     pub error: Option<String>,
 }
 
-pub async fn run_scanner(scanner_type: &ScannerType, target: &str) -> Result<ScanResult> {
+pub async fn run_scanner(
+    scanner_type: &ScannerType,
+    target: &str,
+    extra_args: &[String],
+) -> Result<ScanResult> {
     match scanner_type {
-        ScannerType::Nmap => nmap::run(target).await,
-        ScannerType::Nuclei => nuclei::run(target).await,
-        ScannerType::Zap => zap::run(target).await,
-        ScannerType::Feroxbuster => feroxbuster::run(target).await,
-        ScannerType::Sqlmap => sqlmap::run(target).await,
-        ScannerType::Subfinder => subfinder::run(target).await,
-        ScannerType::Httpx => httpx::run(target).await,
-        ScannerType::Wpscan => wpscan::run(target).await,
+        ScannerType::Nmap => nmap::run(target, extra_args).await,
+        ScannerType::Nuclei => nuclei::run(target, extra_args).await,
+        ScannerType::Zap => zap::run(target, extra_args).await,
+        ScannerType::Feroxbuster => feroxbuster::run(target, extra_args).await,
+        ScannerType::Sqlmap => sqlmap::run(target, extra_args).await,
+        ScannerType::Subfinder => subfinder::run(target, extra_args).await,
+        ScannerType::Httpx => httpx::run(target, extra_args).await,
+        ScannerType::Wpscan => wpscan::run(target, extra_args).await,
         ScannerType::Hydra => {
             // Hydra requires targets from Nmap; standalone run not supported
             Ok(ScanResult {
@@ -129,6 +134,83 @@ pub async fn run_scanner(scanner_type: &ScannerType, target: &str) -> Result<Sca
             })
         }
     }
+}
+
+/// Characters that are forbidden in scanner arguments to prevent shell injection.
+const FORBIDDEN_CHARS: &[char] = &[
+    ';', '|', '&', '`', '$', '(', ')', '{', '}', '<', '>', '\n', '\r',
+];
+
+/// Validate that a single argument token does not contain shell metacharacters.
+fn is_safe_arg(arg: &str) -> bool {
+    !arg.chars().any(|c| FORBIDDEN_CHARS.contains(&c))
+}
+
+/// Split a raw argument string into tokens and validate each one.
+/// Returns `Ok(Vec<String>)` on success or `Err(reason)` if any token is unsafe.
+pub fn validate_and_split_args(raw: &str) -> std::result::Result<Vec<String>, String> {
+    let tokens: Vec<String> = shell_words_split(raw);
+    for token in &tokens {
+        if !is_safe_arg(token) {
+            return Err(format!(
+                "Unsafe argument rejected: {:?} — shell metacharacters (;|&`$(){{}}< >) are not allowed",
+                token
+            ));
+        }
+    }
+    Ok(tokens)
+}
+
+/// Parse CLI `--scanner-args` values ("scanner=args") into a per-scanner map.
+/// Each value has the form "nmap=-sV --script=vuln".
+pub fn parse_scanner_args(
+    raw_args: &[String],
+) -> std::result::Result<HashMap<ScannerType, Vec<String>>, String> {
+    let mut map: HashMap<ScannerType, Vec<String>> = HashMap::new();
+    for entry in raw_args {
+        let (scanner_name, args_str) = entry.split_once('=').ok_or_else(|| {
+            format!(
+                "Invalid --scanner-args format: {:?}. Expected \"scanner=args\"",
+                entry
+            )
+        })?;
+        let scanner_type: ScannerType = scanner_name.parse().map_err(|e: String| e)?;
+        let args = validate_and_split_args(args_str)?;
+        map.entry(scanner_type).or_default().extend(args);
+    }
+    Ok(map)
+}
+
+/// Simple shell-like word splitting that respects double and single quotes.
+/// Does NOT invoke a shell — purely in-process string splitting.
+fn shell_words_split(s: &str) -> Vec<String> {
+    let mut tokens = Vec::new();
+    let mut current = String::new();
+    let mut in_single = false;
+    let mut in_double = false;
+
+    for ch in s.chars() {
+        match ch {
+            '\'' if !in_double => {
+                in_single = !in_single;
+            }
+            '"' if !in_single => {
+                in_double = !in_double;
+            }
+            ' ' | '\t' if !in_single && !in_double => {
+                if !current.is_empty() {
+                    tokens.push(std::mem::take(&mut current));
+                }
+            }
+            _ => {
+                current.push(ch);
+            }
+        }
+    }
+    if !current.is_empty() {
+        tokens.push(current);
+    }
+    tokens
 }
 
 /// Check if a tool is available in PATH
@@ -170,7 +252,20 @@ pub fn extract_sqli_targets(results: &[ScanResult]) -> Vec<String> {
                 .iter()
                 .any(|kw| title_lower.contains(kw) || desc_lower.contains(kw))
             {
-                // Extract URL from details field (where scanners typically store matched-at / endpoint)
+                // Try to extract instance URIs from ZAP's "URIs: url1 url2" in details
+                if let Some(uris_pos) = finding.details.find("URIs: ") {
+                    let uris_str = &finding.details[uris_pos + 6..];
+                    // URIs end at the next newline or end of string
+                    let uris_line = uris_str.lines().next().unwrap_or(uris_str);
+                    for uri in uris_line.split_whitespace() {
+                        if uri.starts_with("http") && !targets.contains(&uri.to_string()) {
+                            targets.push(uri.to_string());
+                        }
+                    }
+                    continue;
+                }
+
+                // Fallback: extract URL from details field start
                 let url = if finding.details.starts_with("http") {
                     finding
                         .details
@@ -295,4 +390,134 @@ pub fn extract_hydra_targets(results: &[ScanResult], target: &str) -> Vec<hydra:
         }
     }
     targets
+}
+
+#[cfg(test)]
+mod scanner_args_tests {
+    use super::*;
+
+    #[test]
+    fn split_simple_args() {
+        let tokens = shell_words_split("-sV --script=vuln --top-ports 1000");
+        assert_eq!(tokens, vec!["-sV", "--script=vuln", "--top-ports", "1000"]);
+    }
+
+    #[test]
+    fn split_quoted_args() {
+        let tokens = shell_words_split(r#"-tags "cve,xss" --severity high"#);
+        assert_eq!(tokens, vec!["-tags", "cve,xss", "--severity", "high"]);
+    }
+
+    #[test]
+    fn split_single_quoted_args() {
+        let tokens = shell_words_split("-w '/path/to/wordlist.txt' -d 3");
+        assert_eq!(tokens, vec!["-w", "/path/to/wordlist.txt", "-d", "3"]);
+    }
+
+    #[test]
+    fn split_empty_string() {
+        let tokens = shell_words_split("");
+        assert!(tokens.is_empty());
+    }
+
+    #[test]
+    fn validate_safe_args() {
+        let result = validate_and_split_args("-sV --script=vuln --top-ports 1000");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().len(), 4);
+    }
+
+    #[test]
+    fn validate_rejects_semicolon() {
+        let result = validate_and_split_args("-sV; rm -rf /");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Unsafe argument"));
+    }
+
+    #[test]
+    fn validate_rejects_pipe() {
+        let result = validate_and_split_args("-sV | cat /etc/passwd");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn validate_rejects_backtick() {
+        let result = validate_and_split_args("`whoami`");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn validate_rejects_dollar() {
+        let result = validate_and_split_args("$(id)");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn validate_rejects_ampersand() {
+        let result = validate_and_split_args("-sV && echo pwned");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_scanner_args_valid() {
+        let raw = vec![
+            "nmap=-sV --script=vuln".to_string(),
+            "nuclei=-tags cve".to_string(),
+        ];
+        let result = parse_scanner_args(&raw);
+        assert!(result.is_ok());
+        let map = result.unwrap();
+        assert_eq!(
+            map.get(&ScannerType::Nmap).unwrap(),
+            &vec!["-sV", "--script=vuln"]
+        );
+        assert_eq!(
+            map.get(&ScannerType::Nuclei).unwrap(),
+            &vec!["-tags", "cve"]
+        );
+    }
+
+    #[test]
+    fn parse_scanner_args_invalid_scanner_name() {
+        let raw = vec!["notascanner=-sV".to_string()];
+        let result = parse_scanner_args(&raw);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Unknown scanner"));
+    }
+
+    #[test]
+    fn parse_scanner_args_missing_equals() {
+        let raw = vec!["nmap -sV".to_string()];
+        let result = parse_scanner_args(&raw);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Expected"));
+    }
+
+    #[test]
+    fn parse_scanner_args_rejects_injection() {
+        let raw = vec!["nmap=-sV; rm -rf /".to_string()];
+        let result = parse_scanner_args(&raw);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Unsafe argument"));
+    }
+
+    #[test]
+    fn parse_scanner_args_empty() {
+        let raw: Vec<String> = vec![];
+        let result = parse_scanner_args(&raw);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
+    }
+
+    #[test]
+    fn parse_scanner_args_merges_multiple_entries() {
+        let raw = vec!["nmap=-sV".to_string(), "nmap=--top-ports 100".to_string()];
+        let result = parse_scanner_args(&raw);
+        assert!(result.is_ok());
+        let map = result.unwrap();
+        assert_eq!(
+            map.get(&ScannerType::Nmap).unwrap(),
+            &vec!["-sV", "--top-ports", "100"]
+        );
+    }
 }

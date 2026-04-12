@@ -1,0 +1,31 @@
+Starting Nmap 7.94 ( https://nmap.org ) at 2024-01-15 10:00 UTC
+Nmap scan report for example.com (93.184.216.34)
+Host is up (0.012s latency).
+
+PORT     STATE SERVICE VERSION
+22/tcp   open  ssh     OpenSSH 8.9p1
+80/tcp   open  http    Apache httpd 2.4.49
+|_http-stored-xss: Couldn't find any stored XSS vulnerabilities.
+|_http-dombased-xss: Couldn't find any DOM based XSS.
+| http-vuln-cve2021-41773:
+|   VULNERABLE:
+|   Path traversal and file disclosure vulnerability in Apache HTTP Server 2.4.49
+|     State: VULNERABLE
+|     IDs:  CVE:CVE-2021-41773
+|       A flaw was found in a change made to path normalization in Apache HTTP Server 2.4.49.
+|     Disclosure date: 2021-10-05
+|     References:
+|_      https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2021-41773
+| http-slowloris-check:
+|   VULNERABLE:
+|   Slowloris DOS attack
+|     State: LIKELY VULNERABLE
+|     IDs:  CVE:CVE-2007-6750
+|       Slowloris tries to keep many connections to the target web server open and hold
+|       them open as long as possible.
+|     Disclosure date: 2009-09-17
+|     References:
+|_      https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2007-6750
+443/tcp  open  https   nginx 1.18.0
+
+Nmap done: 1 IP address (1 host up) scanned in 42.31 seconds

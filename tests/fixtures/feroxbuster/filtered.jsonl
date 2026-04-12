@@ -1,0 +1,6 @@
+{"type":"response","url":"http://example.com/style.css","status":200,"method":"GET","content_length":5000,"line_count":100,"word_count":300}
+{"type":"response","url":"http://example.com/logo.png","status":200,"method":"GET","content_length":20000,"line_count":0,"word_count":0}
+{"type":"response","url":"http://example.com/notfound","status":500,"method":"GET","content_length":100,"line_count":5,"word_count":10}
+{"type":"response","url":"http://example.com/%EF%BF%BD%EF%BF%BD%EF%BF%BD","status":200,"method":"GET","content_length":0,"line_count":0,"word_count":0}
+{"type":"statistics","total_requests":500,"total_expected":1000}
+{"type":"response","url":"http://example.com/real-endpoint","status":200,"method":"GET","content_length":800,"line_count":20,"word_count":50}

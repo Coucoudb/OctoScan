@@ -6,7 +6,7 @@ use tokio::process::Command;
 use super::{check_tool, Finding, ScanResult, ScannerType, Severity};
 
 /// Run sqlmap against a single target URL
-pub async fn run(target: &str) -> Result<ScanResult> {
+pub async fn run(target: &str, extra_args: &[String]) -> Result<ScanResult> {
     let started_at = Utc::now();
 
     if !check_tool("sqlmap").await {
@@ -23,20 +23,24 @@ pub async fn run(target: &str) -> Result<ScanResult> {
         });
     }
 
-    let output = Command::new("sqlmap")
-        .args([
-            "-u",
-            target,
-            "--batch",
-            "--level=3", // test cookies, user-agent, referer
-            "--risk=2",
-            "--threads=4",
-            "--random-agent",     // randomize user-agent (WAF evasion)
-            "--smart",            // thorough tests only on positive heuristic
-            "--technique=BEUSTQ", // all injection techniques
-            "--crawl=3",          // crawl the site to discover injectable endpoints
-            "--forms",            // parse and test forms
-        ])
+    let mut cmd = Command::new("sqlmap");
+    cmd.args([
+        "-u",
+        target,
+        "--batch",
+        "--level=3", // test cookies, user-agent, referer
+        "--risk=2",
+        "--threads=4",
+        "--random-agent",     // randomize user-agent (WAF evasion)
+        "--smart",            // thorough tests only on positive heuristic
+        "--technique=BEUSTQ", // all injection techniques
+        "--crawl=3",          // crawl the site to discover injectable endpoints
+        "--forms",            // parse and test forms
+    ]);
+    if !extra_args.is_empty() {
+        cmd.args(extra_args);
+    }
+    let output = cmd
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
@@ -179,4 +183,59 @@ fn parse_sqlmap_output(output: &str) -> Vec<Finding> {
     }
 
     findings
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_normal_output() {
+        let input = include_str!("../../tests/fixtures/sqlmap/normal.txt");
+        let findings = parse_sqlmap_output(input);
+        // Should find: 2 injection types + 1 DBMS identification
+        let sqli_findings: Vec<_> = findings
+            .iter()
+            .filter(|f| f.title.starts_with("SQL Injection"))
+            .collect();
+        let dbms_findings: Vec<_> = findings
+            .iter()
+            .filter(|f| f.title == "Database Identified")
+            .collect();
+        assert_eq!(sqli_findings.len(), 2);
+        assert_eq!(dbms_findings.len(), 1);
+        assert!(sqli_findings[0].title.contains("boolean-based blind"));
+        assert!(sqli_findings[1].title.contains("time-based blind"));
+    }
+
+    #[test]
+    fn parse_empty_output_no_injection() {
+        let input = include_str!("../../tests/fixtures/sqlmap/empty.txt");
+        let findings = parse_sqlmap_output(input);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn parse_union_and_dump_output() {
+        let input = include_str!("../../tests/fixtures/sqlmap/union_and_dump.txt");
+        let findings = parse_sqlmap_output(input);
+        // UNION and stacked queries should be Critical severity
+        let critical_findings: Vec<_> = findings
+            .iter()
+            .filter(|f| matches!(f.severity, Severity::Critical))
+            .collect();
+        assert!(critical_findings.len() >= 2); // UNION sqli + stacked sqli + data extracted
+                                               // Should detect data dump
+        let dump_findings: Vec<_> = findings
+            .iter()
+            .filter(|f| f.title == "Data Extracted")
+            .collect();
+        assert!(!dump_findings.is_empty());
+    }
+
+    #[test]
+    fn parse_completely_empty_string() {
+        let findings = parse_sqlmap_output("");
+        assert!(findings.is_empty());
+    }
 }

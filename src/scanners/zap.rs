@@ -19,7 +19,7 @@ fn find_zap_dir() -> Option<PathBuf> {
     None
 }
 
-pub async fn run(target: &str) -> Result<ScanResult> {
+pub async fn run(target: &str, extra_args: &[String]) -> Result<ScanResult> {
     let started_at = Utc::now();
 
     // Detect which ZAP command is available
@@ -57,6 +57,9 @@ pub async fn run(target: &str) -> Result<ScanResult> {
     } else {
         // zap-cli style
         cmd.args(["quick-scan", "--self-contained", "-s", "xss,sqli", target]);
+    }
+    if !extra_args.is_empty() {
+        cmd.args(extra_args);
     }
 
     let output = cmd
@@ -253,6 +256,9 @@ fn parse_zap_xml(xml: &str) -> Vec<Finding> {
             let cweid = extract_xml_tag(alert_xml, "cweid").unwrap_or_default();
             let count = extract_xml_tag(alert_xml, "count").unwrap_or_default();
 
+            // Extract instance URIs
+            let instance_uris = extract_instance_uris(alert_xml);
+
             let severity = match riskcode {
                 3 => Severity::High,
                 2 => Severity::Medium,
@@ -264,14 +270,20 @@ fn parse_zap_xml(xml: &str) -> Vec<Finding> {
             let desc_clean = decode_xml_entities(&desc);
             let solution_clean = decode_xml_entities(&solution);
 
+            let mut details = format!(
+                "Risk: {} | CWE: {} | Instances: {}\nSolution: {}",
+                riskdesc, cweid, count, solution_clean
+            );
+            if !instance_uris.is_empty() {
+                details.push_str("\nURIs: ");
+                details.push_str(&instance_uris.join(" "));
+            }
+
             findings.push(Finding {
                 title: name,
                 severity,
                 description: desc_clean,
-                details: format!(
-                    "Risk: {} | CWE: {} | Instances: {}\nSolution: {}",
-                    riskdesc, cweid, count, solution_clean
-                ),
+                details,
             });
 
             search_from = abs_end;
@@ -281,6 +293,29 @@ fn parse_zap_xml(xml: &str) -> Vec<Finding> {
     }
 
     findings
+}
+
+/// Extract all <uri> values from <instance> elements within an alertitem
+fn extract_instance_uris(alert_xml: &str) -> Vec<String> {
+    let mut uris = Vec::new();
+    let mut search_from = 0;
+    while let Some(start) = alert_xml[search_from..].find("<instance>") {
+        let abs_start = search_from + start;
+        if let Some(end) = alert_xml[abs_start..].find("</instance>") {
+            let abs_end = abs_start + end + "</instance>".len();
+            let instance = &alert_xml[abs_start..abs_end];
+            if let Some(uri) = extract_xml_tag(instance, "uri") {
+                let decoded = decode_xml_entities(&uri);
+                if !decoded.is_empty() && !uris.contains(&decoded) {
+                    uris.push(decoded);
+                }
+            }
+            search_from = abs_end;
+        } else {
+            break;
+        }
+    }
+    uris
 }
 
 /// Extract text content of an XML tag (first occurrence)
@@ -316,4 +351,101 @@ fn decode_xml_entities(s: &str) -> String {
         .join("")
         .trim()
         .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_xml_output() {
+        let input = include_str!("../../tests/fixtures/zap/normal.xml");
+        let findings = parse_zap_output(input);
+        assert_eq!(findings.len(), 2);
+        assert_eq!(findings[0].title, "Cross-Site Scripting (Reflected)");
+        assert!(matches!(findings[0].severity, Severity::High));
+        // Verify instance URIs are extracted
+        assert!(findings[0]
+            .details
+            .contains("http://example.com/search?q=test"));
+        assert!(findings[0]
+            .details
+            .contains("http://example.com/comment?body=hello"));
+        assert_eq!(findings[1].title, "Cookie Without Secure Flag");
+        assert!(matches!(findings[1].severity, Severity::Low));
+        // No instances in second alert
+        assert!(!findings[1].details.contains("URIs:"));
+    }
+
+    #[test]
+    fn parse_json_output() {
+        let input = include_str!("../../tests/fixtures/zap/alerts.json");
+        let findings = parse_zap_output(input);
+        assert_eq!(findings.len(), 3);
+        assert_eq!(findings[0].title, "SQL Injection");
+        assert!(matches!(findings[0].severity, Severity::High));
+        assert_eq!(findings[1].title, "X-Frame-Options Header Not Set");
+        assert!(matches!(findings[1].severity, Severity::Medium));
+    }
+
+    #[test]
+    fn parse_text_output() {
+        let input = include_str!("../../tests/fixtures/zap/text.txt");
+        let findings = parse_zap_output(input);
+        // WARN-NEW and FAIL-NEW lines should produce findings
+        let warn_findings: Vec<_> = findings
+            .iter()
+            .filter(|f| matches!(f.severity, Severity::Medium))
+            .collect();
+        let fail_findings: Vec<_> = findings
+            .iter()
+            .filter(|f| matches!(f.severity, Severity::High))
+            .collect();
+        assert!(!warn_findings.is_empty());
+        assert!(!fail_findings.is_empty());
+    }
+
+    #[test]
+    fn parse_empty_output() {
+        let input = include_str!("../../tests/fixtures/zap/empty.txt");
+        let findings = parse_zap_output(input);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn decode_xml_entities_basic() {
+        let decoded = decode_xml_entities("&lt;p&gt;Hello &amp; world&lt;/p&gt;");
+        assert_eq!(decoded, "Hello & world");
+    }
+
+    #[test]
+    fn extract_xml_tag_basic() {
+        let xml = "<alertitem><name>Test Alert</name><riskcode>2</riskcode></alertitem>";
+        assert_eq!(extract_xml_tag(xml, "name"), Some("Test Alert".to_string()));
+        assert_eq!(extract_xml_tag(xml, "riskcode"), Some("2".to_string()));
+        assert_eq!(extract_xml_tag(xml, "missing"), None);
+    }
+
+    #[test]
+    fn extract_instance_uris_from_alert() {
+        let alert = r#"<alertitem>
+            <name>SQL Injection</name>
+            <instances>
+                <instance><uri>http://example.com/page?id=1</uri><method>GET</method></instance>
+                <instance><uri>http://example.com/api?q=test</uri><method>GET</method></instance>
+                <instance><uri>http://example.com/page?id=1</uri><method>GET</method></instance>
+            </instances>
+        </alertitem>"#;
+        let uris = extract_instance_uris(alert);
+        assert_eq!(uris.len(), 2); // deduplicated
+        assert!(uris.contains(&"http://example.com/page?id=1".to_string()));
+        assert!(uris.contains(&"http://example.com/api?q=test".to_string()));
+    }
+
+    #[test]
+    fn extract_instance_uris_empty() {
+        let alert = "<alertitem><name>Test</name></alertitem>";
+        let uris = extract_instance_uris(alert);
+        assert!(uris.is_empty());
+    }
 }

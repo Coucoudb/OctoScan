@@ -1,0 +1,4 @@
+Hydra v9.5 (c) 2023 by van Hauser/THC & David Maciejak
+[DATA] max 4 tasks per 1 server, overall 4 tasks, 100 login tries (l:10/p:10)
+[DATA] attacking ssh://10.0.0.1:22/
+1 of 1 target completed, 0 valid passwords found

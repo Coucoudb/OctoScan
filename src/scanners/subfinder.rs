@@ -5,7 +5,7 @@ use tokio::process::Command;
 
 use super::{check_tool, Finding, ScanResult, ScannerType, Severity};
 
-pub async fn run(target: &str) -> Result<ScanResult> {
+pub async fn run(target: &str, extra_args: &[String]) -> Result<ScanResult> {
     let started_at = Utc::now();
 
     if !check_tool("subfinder").await {
@@ -33,13 +33,17 @@ pub async fn run(target: &str) -> Result<ScanResult> {
         .next()
         .unwrap_or(target);
 
-    let output = Command::new("subfinder")
-        .args([
-            "-d", domain, "-silent", "-all", // use all sources
-            "-t", "50", // threads
-            "-timeout", "30",  // timeout per source (seconds)
-            "-nW", // remove wildcard subdomains
-        ])
+    let mut cmd = Command::new("subfinder");
+    cmd.args([
+        "-d", domain, "-silent", "-all", // use all sources
+        "-t", "50", // threads
+        "-timeout", "30",  // timeout per source (seconds)
+        "-nW", // remove wildcard subdomains
+    ]);
+    if !extra_args.is_empty() {
+        cmd.args(extra_args);
+    }
+    let output = cmd
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
@@ -95,4 +99,40 @@ fn parse_subfinder_output(output: &str) -> Vec<Finding> {
     }
 
     findings
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_normal_output() {
+        let input = include_str!("../../tests/fixtures/subfinder/normal.txt");
+        let findings = parse_subfinder_output(input);
+        assert_eq!(findings.len(), 5);
+        assert!(findings[0].title.contains("www.example.com"));
+        assert!(findings[1].title.contains("mail.example.com"));
+        assert!(matches!(findings[0].severity, Severity::Info));
+    }
+
+    #[test]
+    fn parse_empty_output() {
+        let input = include_str!("../../tests/fixtures/subfinder/empty.txt");
+        let findings = parse_subfinder_output(input);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn parse_single_subdomain() {
+        let input = include_str!("../../tests/fixtures/subfinder/single.txt");
+        let findings = parse_subfinder_output(input);
+        assert_eq!(findings.len(), 1);
+        assert!(findings[0].title.contains("www.example.com"));
+    }
+
+    #[test]
+    fn parse_completely_empty_string() {
+        let findings = parse_subfinder_output("");
+        assert!(findings.is_empty());
+    }
 }
