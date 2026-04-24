@@ -132,7 +132,7 @@ pub fn load_all_from(dir: &Path) -> Result<Vec<HistoryEntry>> {
             }
         }
     }
-    entries.sort_by(|a, b| b.started_at.cmp(&a.started_at));
+    entries.sort_by_key(|e| std::cmp::Reverse(e.started_at));
     Ok(entries)
 }
 

@@ -1,3 +1,9 @@
+// The nested-if-inside-match style used throughout the key handler is
+// intentional: it keeps each guard close to the action and avoids huge
+// match-guard chains. Silence clippy::collapsible_match (introduced in
+// clippy 1.95) for the whole module.
+#![allow(clippy::collapsible_match, clippy::collapsible_if)]
+
 use anyhow::Result;
 use crossterm::{
     event::{
