@@ -1,0 +1,44 @@
+# Codecov configuration
+# https://docs.codecov.com/docs/codecov-yaml
+
+codecov:
+  require_ci_to_pass: true
+  notify:
+    # Wait until the coverage job has uploaded before posting PR status
+    wait_for_ci: true
+
+coverage:
+  precision: 2
+  round: down
+  range: "20...80"
+
+  status:
+    project:
+      default:
+        # Allow coverage to drop by up to 1% before failing the project status
+        target: auto
+        threshold: 1%
+        informational: false
+    patch:
+      default:
+        # New code in a PR should be at least 50% covered.
+        # Drop to "auto" or remove this block if too strict early on.
+        target: 50%
+        threshold: 5%
+        informational: true
+
+# Files excluded from coverage reporting (UI, installers, entry points
+# are mostly integration / interactive code that is not unit-testable).
+ignore:
+  - "tests/**"
+  - "target/**"
+  - "src/main.rs"
+  - "src/tui.rs"
+  - "src/ui.rs"
+  - "src/installer.rs"
+  - "src/logger.rs"
+
+comment:
+  layout: "reach, diff, flags, files"
+  behavior: default
+  require_changes: false
