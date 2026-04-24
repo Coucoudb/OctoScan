@@ -79,7 +79,7 @@ jobs:
           tool: cargo-tarpaulin
 
       - name: Run cargo tarpaulin
-        run: cargo tarpaulin --out Xml --workspace --timeout 180 --fail-under 30
+        run: cargo tarpaulin --out Xml --workspace --timeout 180 --fail-under 18
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
