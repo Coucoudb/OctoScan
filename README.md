@@ -12,6 +12,7 @@
 ![GitHub Stars](https://img.shields.io/github/stars/Coucoudb/OctoScan?style=for-the-badge&color=yellow)
 ![Security Audit](https://img.shields.io/badge/Security-Audit-blue?style=for-the-badge&logo=opensourceinitiative&logoColor=white)
 ![Bug Bounty](https://img.shields.io/badge/Bug%20Bounty-Tool-orange?style=for-the-badge&logo=hackerone&logoColor=white)
+[![Coverage](https://img.shields.io/codecov/c/github/Coucoudb/OctoScan?style=for-the-badge&logo=codecov&logoColor=white)](https://codecov.io/gh/Coucoudb/OctoScan)
 
 OctoScan is a CLI wrapper that orchestrates popular security tools (Nmap, Nuclei, ZAP, Feroxbuster, SQLMap, Subfinder, httpx, WPScan, Hydra) for fast and automated web reconnaissance and auditing. It features an interactive terminal UI for navigating scans and results.
 
@@ -29,6 +30,7 @@ OctoScan is a CLI wrapper that orchestrates popular security tools (Nmap, Nuclei
 - **Auto-installation** — Automatically detects and installs missing tools on Windows, macOS, and Linux
 - **Structured findings** — Parsed results with severity levels (Critical, High, Medium, Low, Info)
 - **Export** — Save reports as JSON or TXT
+- **Scan history** — Past scans are saved automatically; browse them in the TUI (`H`) or via `octoscan history list/show/export/diff`
 - **CLI mode** — Run scans directly from the command line without interactive mode
 - **Logging** — Debug logs written to `%LOCALAPPDATA%\octoscan\logs\` (Windows) for troubleshooting
 

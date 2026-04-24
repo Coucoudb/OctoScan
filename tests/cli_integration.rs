@@ -417,3 +417,34 @@ fn profile_shows_available_on_error() {
         .stderr(predicate::str::contains("recon"))
         .stderr(predicate::str::contains("full"));
 }
+
+// ─── history subcommand ─────────────────────────
+
+#[test]
+fn history_help_shows_actions() {
+    octoscan()
+        .args(["history", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("list"))
+        .stdout(predicate::str::contains("show"))
+        .stdout(predicate::str::contains("export"))
+        .stdout(predicate::str::contains("diff"));
+}
+
+#[test]
+fn history_show_unknown_id_fails() {
+    octoscan()
+        .args(["history", "show", "no-such-id-1234"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("no-such-id-1234"));
+}
+
+#[test]
+fn history_diff_requires_two_ids() {
+    octoscan()
+        .args(["history", "diff", "only-one"])
+        .assert()
+        .failure();
+}

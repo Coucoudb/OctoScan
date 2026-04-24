@@ -1,0 +1,22 @@
+# cargo-tarpaulin configuration
+# https://github.com/xd009642/tarpaulin
+
+[default]
+# Output formats produced by `cargo tarpaulin`
+out = ["Xml", "Stdout"]
+
+# Run all tests in the workspace
+workspace = true
+
+# Per-test timeout (seconds)
+timeout = 180
+
+# Coverage baseline. CI fails if total line coverage drops below this.
+# Bump this number as coverage improves to lock in gains.
+fail-under = 30
+
+# Exclude generated/build artifacts and integration test sources from coverage
+exclude-files = [
+    "target/*",
+    "tests/*",
+]

@@ -5,7 +5,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::app::App;
-use crate::scanners::Severity;
+use crate::scanners::{ScanResult, ScannerType, Severity};
 
 #[derive(Serialize)]
 struct ExportReport {
@@ -36,47 +36,79 @@ struct ExportFinding {
 }
 
 pub fn export_results(app: &App, path: &str) -> Result<()> {
+    export_inner(
+        &app.id.to_string(),
+        &app.target,
+        &app.selected_scanners,
+        &app.results,
+        path,
+    )
+}
+
+/// Export an arbitrary set of scan results (used by `octoscan history export`).
+pub fn export_scan(
+    scan_id: &str,
+    target: &str,
+    scanners: &[ScannerType],
+    results: &[ScanResult],
+    path: &str,
+) -> Result<()> {
+    export_inner(scan_id, target, scanners, results, path)
+}
+
+fn export_inner(
+    scan_id: &str,
+    target: &str,
+    scanners: &[ScannerType],
+    results: &[ScanResult],
+    path: &str,
+) -> Result<()> {
     let extension = Path::new(path)
         .extension()
         .and_then(|e| e.to_str())
         .unwrap_or("json");
 
     match extension {
-        "json" => export_json(app, path),
-        "txt" => export_txt(app, path),
-        _ => export_json(app, path),
+        "txt" => export_txt(scan_id, target, scanners, results, path),
+        _ => export_json(scan_id, target, results, path),
     }
 }
 
-fn export_json(app: &App, path: &str) -> Result<()> {
-    let report = build_report(app);
+fn export_json(scan_id: &str, target: &str, results: &[ScanResult], path: &str) -> Result<()> {
+    let report = build_report(scan_id, target, results);
     let json = serde_json::to_string_pretty(&report).context("Failed to serialize report")?;
     fs::write(path, json).context(format!("Failed to write to {}", path))?;
     Ok(())
 }
 
-fn export_txt(app: &App, path: &str) -> Result<()> {
+fn export_txt(
+    scan_id: &str,
+    target: &str,
+    scanners: &[ScannerType],
+    results: &[ScanResult],
+    path: &str,
+) -> Result<()> {
     let mut output = String::new();
 
     output.push_str("═══════════════════════════════════════════════════════\n");
     output.push_str("  OctoScan Security Audit Report\n");
     output.push_str("═══════════════════════════════════════════════════════\n\n");
-    output.push_str(&format!("Scan ID:    {}\n", app.id));
-    output.push_str(&format!("Target:     {}\n", app.target));
+    output.push_str(&format!("Scan ID:    {}\n", scan_id));
+    output.push_str(&format!("Target:     {}\n", target));
     output.push_str(&format!(
         "Generated:  {}\n",
         Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
     ));
     output.push_str(&format!(
         "Scanners:   {}\n\n",
-        app.selected_scanners
+        scanners
             .iter()
             .map(|s| s.to_string())
             .collect::<Vec<_>>()
             .join(", ")
     ));
 
-    for result in &app.results {
+    for result in results {
         output.push_str("───────────────────────────────────────────────────────\n");
         output.push_str(&format!("  Scanner: {}\n", result.scanner));
         output.push_str(&format!(
@@ -129,13 +161,12 @@ fn export_txt(app: &App, path: &str) -> Result<()> {
     Ok(())
 }
 
-fn build_report(app: &App) -> ExportReport {
+fn build_report(scan_id: &str, target: &str, results: &[ScanResult]) -> ExportReport {
     ExportReport {
-        scan_id: app.id.to_string(),
-        target: app.target.clone(),
+        scan_id: scan_id.to_string(),
+        target: target.to_string(),
         generated_at: Utc::now().to_rfc3339(),
-        results: app
-            .results
+        results: results
             .iter()
             .map(|r| ExportScanResult {
                 scanner: r.scanner.to_string(),

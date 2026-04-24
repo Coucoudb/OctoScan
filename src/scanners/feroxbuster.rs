@@ -61,8 +61,18 @@ pub async fn run(target: &str, extra_args: &[String]) -> Result<ScanResult> {
         "-t".to_string(),
         "50".to_string(), // threads
         "-k".to_string(), // skip TLS cert verification
+        // Filter out noisy / false-positive statuses:
+        //   404 — not found
+        //   403 — forbidden (typically inaccessible, often catch-all)
+        //   301/302 — redirects (the redirect target is what matters, not the source)
         "--filter-status".to_string(),
-        "404".to_string(), // filter out 404s
+        "404".to_string(),
+        "--filter-status".to_string(),
+        "403".to_string(),
+        "--filter-status".to_string(),
+        "301".to_string(),
+        "--filter-status".to_string(),
+        "302".to_string(),
         "--timeout".to_string(),
         "10".to_string(), // request timeout (seconds)
     ];
@@ -151,8 +161,11 @@ fn parse_feroxbuster_output(output: &str) -> Vec<Finding> {
             let content_length = json["content_length"].as_u64().unwrap_or(0);
             let method = json["method"].as_str().unwrap_or("GET");
 
-            // Skip error responses (catch-all routes, bad requests)
-            if status >= 400 && status != 401 && status != 403 {
+            // Skip error responses, redirects, and forbidden endpoints.
+            // 401 is kept because it indicates a real, protected resource.
+            // 403 and 301/302 are dropped: they are typically catch-all routes
+            // or unreachable endpoints that produce noisy false positives.
+            if status >= 300 && status != 401 {
                 continue;
             }
 
@@ -174,8 +187,7 @@ fn parse_feroxbuster_output(output: &str) -> Vec<Finding> {
 
             let severity = match status {
                 200 => Severity::Info,
-                301 | 302 => Severity::Low,
-                401 | 403 => Severity::Medium,
+                401 => Severity::Medium,
                 _ => Severity::Info,
             };
 
@@ -199,13 +211,10 @@ mod tests {
     fn parse_normal_output() {
         let input = include_str!("../../tests/fixtures/feroxbuster/normal.jsonl");
         let findings = parse_feroxbuster_output(input);
-        assert_eq!(findings.len(), 3);
+        // 403 and 301 are filtered as false positives; only the 200 remains.
+        assert_eq!(findings.len(), 1);
         assert!(findings[0].title.contains("200"));
         assert!(findings[0].title.contains("/admin"));
-        assert!(findings[1].title.contains("403"));
-        assert!(matches!(findings[1].severity, Severity::Medium));
-        assert!(findings[2].title.contains("301"));
-        assert!(matches!(findings[2].severity, Severity::Low));
     }
 
     #[test]

@@ -17,6 +17,7 @@ pub enum AppScreen {
     Scanning,
     Results,
     Export,
+    History,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -71,6 +72,13 @@ pub struct App {
     // Profile selection
     pub available_profiles: Vec<Profile>,
     pub profile_cursor: usize,
+    // History browser
+    pub history_entries: Vec<crate::history::HistoryEntry>,
+    pub history_cursor: usize,
+    pub history_error: Option<String>,
+    /// True when the current Results view comes from a loaded history entry
+    /// (rather than a fresh scan). Prevents re-saving the same scan.
+    pub viewing_history: bool,
 }
 
 impl App {
@@ -107,6 +115,10 @@ impl App {
             scanner_args_cursor: 0,
             available_profiles: crate::profiles::all_profiles(),
             profile_cursor: 0,
+            history_entries: Vec::new(),
+            history_cursor: 0,
+            history_error: None,
+            viewing_history: false,
         }
     }
 
@@ -143,6 +155,10 @@ impl App {
             scanner_args_cursor: 0,
             available_profiles: crate::profiles::all_profiles(),
             profile_cursor: 0,
+            history_entries: Vec::new(),
+            history_cursor: 0,
+            history_error: None,
+            viewing_history: false,
         }
     }
 

@@ -67,6 +67,7 @@ async fn run_event_loop(
     app: &mut App,
 ) -> Result<()> {
     let mut event_rx: Option<mpsc::Receiver<AppEvent>> = None;
+    let mut history_saved = false;
 
     // If we started in Scanning mode (from CLI), check tools first
     if app.screen == AppScreen::Scanning && app.scan_status == ScanStatus::Idle {
@@ -77,6 +78,23 @@ async fn run_event_loop(
 
     loop {
         terminal.draw(|f| ui::draw(f, app))?;
+
+        // Persist completed scans to history exactly once per run.
+        if !history_saved
+            && app.scan_status == ScanStatus::Completed
+            && !app.results.is_empty()
+            && !app.viewing_history
+        {
+            match crate::history::save_scan(app) {
+                Ok(p) => log::info!("Scan saved to history: {}", p.display()),
+                Err(e) => log::warn!("Failed to save scan history: {}", e),
+            }
+            history_saved = true;
+        }
+        // Allow saving again after the user starts a new scan.
+        if app.scan_status == ScanStatus::Idle && history_saved {
+            history_saved = false;
+        }
 
         // Process async events
         if let Some(ref mut rx) = event_rx {
@@ -480,11 +498,65 @@ async fn run_event_loop(
                             KeyCode::Char('s') | KeyCode::Enter => {
                                 app.screen = AppScreen::TargetInput;
                             }
+                            KeyCode::Char('H') => {
+                                match crate::history::load_all() {
+                                    Ok(entries) => {
+                                        app.history_entries = entries;
+                                        app.history_error = None;
+                                    }
+                                    Err(e) => {
+                                        app.history_entries.clear();
+                                        app.history_error = Some(e.to_string());
+                                    }
+                                }
+                                app.history_cursor = 0;
+                                app.screen = AppScreen::History;
+                            }
                             KeyCode::Char('q') => {
                                 app.should_quit = true;
                             }
                             KeyCode::Char('h') => {
                                 app.show_help = !app.show_help;
+                            }
+                            _ => {}
+                        },
+
+                        AppScreen::History => match key.code {
+                            KeyCode::Up | KeyCode::Char('k') => {
+                                if app.history_cursor > 0 {
+                                    app.history_cursor -= 1;
+                                }
+                            }
+                            KeyCode::Down | KeyCode::Char('j') => {
+                                if !app.history_entries.is_empty()
+                                    && app.history_cursor < app.history_entries.len() - 1
+                                {
+                                    app.history_cursor += 1;
+                                }
+                            }
+                            KeyCode::Enter => {
+                                if let Some(entry) =
+                                    app.history_entries.get(app.history_cursor).cloned()
+                                {
+                                    // Load the selected scan into the Results view
+                                    // so the user can browse, scroll, and re-export it.
+                                    app.target = entry.target.clone();
+                                    app.selected_scanners = entry.scanners.clone();
+                                    app.results = entry.results.clone();
+                                    app.started_at = Some(entry.started_at);
+                                    app.finished_at = Some(entry.finished_at);
+                                    app.scan_status = ScanStatus::Completed;
+                                    app.viewing_history = true;
+                                    app.result_tab = 0;
+                                    app.result_scroll = 0;
+                                    app.screen = AppScreen::Results;
+                                }
+                            }
+                            KeyCode::Esc => {
+                                app.screen = AppScreen::Home;
+                            }
+                            KeyCode::Char('q') => {
+                                app.should_quit = true;
                             }
                             _ => {}
                         },
@@ -706,6 +778,8 @@ async fn run_event_loop(
                                 app.screen = AppScreen::TargetInput;
                                 app.results.clear();
                                 app.scan_status = ScanStatus::Idle;
+                                app.id = uuid::Uuid::new_v4();
+                                app.viewing_history = false;
                             }
                             _ => {}
                         },

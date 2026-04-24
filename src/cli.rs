@@ -37,4 +37,45 @@ pub enum Commands {
         #[arg(short = 'p', long, conflicts_with = "scanners")]
         profile: Option<String>,
     },
+
+    /// Browse, export and compare past scans
+    History {
+        #[command(subcommand)]
+        action: Option<HistoryAction>,
+
+        /// Compare two past scans by id (oldest first). Equivalent to
+        /// `octoscan history diff <OLD> <NEW>`.
+        #[arg(long, value_names = ["OLD_ID", "NEW_ID"], num_args = 2)]
+        diff: Option<Vec<String>>,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum HistoryAction {
+    /// List past scans (default action)
+    List,
+
+    /// Show details for a past scan
+    Show {
+        /// Scan id (full uuid or unique prefix)
+        id: String,
+    },
+
+    /// Re-export a past scan to a file (json or txt)
+    Export {
+        /// Scan id (full uuid or unique prefix)
+        id: String,
+
+        /// Output file path. The format is inferred from the extension.
+        #[arg(short, long)]
+        output: String,
+    },
+
+    /// Compare two past scans (oldest first)
+    Diff {
+        /// Older scan id
+        old: String,
+        /// Newer scan id
+        new: String,
+    },
 }

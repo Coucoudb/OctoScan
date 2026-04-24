@@ -48,6 +48,7 @@ pub fn draw(f: &mut Frame, app: &App) {
         AppScreen::Scanning => draw_scanning(f, chunks[1], app),
         AppScreen::Results => draw_results(f, chunks[1], app),
         AppScreen::Export => draw_export(f, chunks[1], app),
+        AppScreen::History => draw_history(f, chunks[1], app),
     }
 
     if app.show_help {
@@ -102,7 +103,7 @@ fn draw_header(f: &mut Frame, area: Rect, app: &App) {
 
 fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
     let help_text = match app.screen {
-        AppScreen::Home => "s: Start scan │ h: Help │ q: Quit",
+        AppScreen::Home => "s: Start scan │ H: History │ h: Help │ q: Quit",
         AppScreen::TargetInput => "Enter: Confirm │ Esc: Back",
         AppScreen::ProfileSelect => "↑/↓: Navigate │ Enter: Select │ Esc: Back",
         AppScreen::ScannerSelect => "↑/↓: Navigate │ Space: Toggle │ Enter: Next │ Esc: Back",
@@ -114,6 +115,7 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
             "Tab/Shift+Tab: Switch scanner │ ↑/↓: Scroll │ e: Export │ n: New scan │ q: Quit"
         }
         AppScreen::Export => "Enter: Confirm │ Esc: Cancel",
+        AppScreen::History => "↑/↓: Navigate │ Enter: View │ Esc: Back │ q: Quit",
     };
 
     let message = if !app.progress_message.is_empty() {
@@ -167,6 +169,15 @@ fn draw_home(f: &mut Frame, area: Rect) {
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw("Start a new scan"),
+        ])),
+        ListItem::new(Line::from(vec![
+            Span::styled(
+                " [H] ",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw("Browse scan history"),
         ])),
         ListItem::new(Line::from(vec![
             Span::styled(
@@ -927,6 +938,98 @@ fn draw_installing(f: &mut Frame, area: Rect, app: &App) {
                 .border_style(Style::default().fg(Color::DarkGray)),
         );
     f.render_widget(log_info, chunks[2]);
+}
+
+fn draw_history(f: &mut Frame, area: Rect, app: &App) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(3), Constraint::Min(5)])
+        .split(area);
+
+    let title_text = if let Some(err) = &app.history_error {
+        format!(" Scan History — {}", err)
+    } else {
+        format!(" Scan History — {} entries", app.history_entries.len())
+    };
+    let title = Paragraph::new(title_text)
+        .style(Style::default().fg(Color::Cyan))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Cyan)),
+        );
+    f.render_widget(title, chunks[0]);
+
+    if app.history_entries.is_empty() {
+        let empty = Paragraph::new(
+            "\n  No scans recorded yet.\n  Run a scan, then return here to review the result.\n",
+        )
+        .style(Style::default().fg(Color::DarkGray))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::DarkGray)),
+        );
+        f.render_widget(empty, chunks[1]);
+        return;
+    }
+
+    let items: Vec<ListItem> = app
+        .history_entries
+        .iter()
+        .enumerate()
+        .map(|(i, e)| {
+            let cursor = if i == app.history_cursor {
+                "▶ "
+            } else {
+                "  "
+            };
+            let scanners: String = e
+                .scanners
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            let line = format!(
+                "{}{}  {}  {:<25}  {} findings  [{}]",
+                cursor,
+                short(&e.id),
+                e.started_at.format("%Y-%m-%d %H:%M"),
+                truncate_str(&e.target, 25),
+                e.finding_count(),
+                scanners
+            );
+            let style = if i == app.history_cursor {
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::White)
+            };
+            ListItem::new(Line::from(Span::styled(line, style)))
+        })
+        .collect();
+
+    let list = List::new(items).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::DarkGray)),
+    );
+    f.render_widget(list, chunks[1]);
+}
+
+fn short(id: &str) -> String {
+    id.chars().take(8).collect()
+}
+
+fn truncate_str(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        s.to_string()
+    } else {
+        let mut out: String = s.chars().take(max.saturating_sub(1)).collect();
+        out.push('…');
+        out
+    }
 }
 
 fn draw_help_popup(f: &mut Frame, area: Rect) {
